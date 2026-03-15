@@ -1,0 +1,33 @@
+# -----------------
+# Python
+# -----------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# virtual environment
+.venv/
+venv/
+
+# environment variables
+.env
+
+# -----------------
+# Next.js / Node
+# -----------------
+node_modules/
+.next/
+npm-debug.log*
+
+# -----------------
+# IDE
+# -----------------
+.vscode/
+.idea/
+
+# -----------------
+# OS
+# -----------------
+.DS_Store
+Thumbs.db
