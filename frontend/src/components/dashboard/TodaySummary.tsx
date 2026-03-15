@@ -36,10 +36,10 @@ export function TodaySummary() {
                 <div className="font-display mb-1 text-2xl text-foreground">
                   {stat.value}
                 </div>
-                <div className="mb-0.5 text-sm text-foreground">
+                <div className="font-sans mb-0.5 text-sm text-foreground">
                   {stat.label}
                 </div>
-                <div className="text-xs text-muted-foreground">
+                <div className="font-sans text-xs text-muted-foreground">
                   {stat.subtext}
                 </div>
               </div>
