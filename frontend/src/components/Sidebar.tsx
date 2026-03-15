@@ -35,19 +35,9 @@ const data = {
   },
   teams: [
     {
-      name: "Acme Inc",
+      name: "Health Log",
       logo: GalleryVerticalEnd,
       plan: "Enterprise",
-    },
-    {
-      name: "Acme Corp.",
-      logo: AudioWaveform,
-      plan: "Startup",
-    },
-    {
-      name: "Evil Corp.",
-      logo: Command,
-      plan: "Free",
     },
   ],
   navMain: [
@@ -139,13 +129,18 @@ const data = {
   ],
   projects: [
     {
-      name: "Playground",
-      url: "/playground",
+      name: "Dashboard",
+      url: "/dashboard",
       icon: Frame,
     },
     {
-      name: "knowledge Base",
-      url: "/knowledgeBase",
+      name: "Diet Chart",
+      url: "/dietChart",
+      icon: PieChart,
+    },
+    {
+      name: "Meal Plan",
+      url: "/mealPlan",
       icon: PieChart,
     },
     // {
