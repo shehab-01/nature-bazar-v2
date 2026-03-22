@@ -143,6 +143,16 @@ const data = {
       url: "/mealPlan",
       icon: PieChart,
     },
+    {
+      name: "Workout",
+      url: "/workout",
+      icon: PieChart,
+    },
+    {
+      name: "Progerss",
+      url: "/progress",
+      icon: PieChart,
+    },
     // {
     //   name: "Travel",
     //   url: "#",
