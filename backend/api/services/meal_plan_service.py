@@ -3,9 +3,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from database import AsyncSessionLocal
 
-HARDCODED_USER_ID = "00000000-0000-0000-0000-000000000001"
-HARDCODED_WEEK_START = "2026-03-23"
-
 # Entry-level rows — no repeated day totals
 MEAL_ENTRIES_QUERY = text("""
     SELECT
@@ -45,11 +42,6 @@ DAY_TOTALS_QUERY = text("""
     GROUP BY mpd.day_of_week
     ORDER BY mpd.day_of_week
 """)
-
-PARAMS = {
-    "user_id": HARDCODED_USER_ID,
-    "week_start_date": HARDCODED_WEEK_START,
-}
 
 
 async def get_week_meal_plan(user_id: str, week_start_date: str) -> dict:

@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from database import engine, Base
 from api.routers import test_router
 from api.routers import meal_plan_router
+from api.routers import workout_router
 
 
 class HealthCheck(BaseModel):
@@ -46,6 +47,7 @@ app.add_middleware(
 
 app.include_router(test_router.router, tags=["Test Router"])
 app.include_router(meal_plan_router.router, tags=["Meal Plan Router"])
+app.include_router(workout_router.router, tags=["Workout Router"])
 
 
 @app.get("/", tags=["Root"])

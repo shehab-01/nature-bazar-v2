@@ -82,6 +82,7 @@ const MealPlan = () => {
   };
 
   const availableDays = weekMeals ? Object.keys(weekMeals) : [];
+  console.log(availableDays)
   const currentDayMeals = weekMeals?.[activeDay];
 
   return (

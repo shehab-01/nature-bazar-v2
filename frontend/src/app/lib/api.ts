@@ -53,8 +53,34 @@ export const dashboard = {
 
 // ─── Workout ──────────────────────────────────────────────────────────────────
 
+export interface WorkoutExercise {
+  name: string;
+  sets: number;
+  reps: string;
+  completed: boolean;
+}
+
+export interface WorkoutSession {
+  session_name: string;
+  category: string;
+  duration: number;
+  completed: boolean;
+  exercises: WorkoutExercise[];
+}
+
+export interface WorkoutDay {
+  day_name: string;
+  is_rest_day: boolean;
+  sessions: WorkoutSession[];
+}
+
 export const workout = {
-  // getWeekPlan: async (userId: string, weekStart: string): Promise<WeekWorkoutPlan> => { ... }
+  getWeekPlan: async (userId: string, weekStart: string): Promise<WorkoutDay[]> => {
+    const { data } = await axiosInstance.get<{ data: WorkoutDay[] }>("/api/v1/workout/week-plan", {
+      params: { user_id: userId, week_start_date: weekStart },
+    });
+    return data.data;
+  },
 };
 
 // ─── Progress ─────────────────────────────────────────────────────────────────
