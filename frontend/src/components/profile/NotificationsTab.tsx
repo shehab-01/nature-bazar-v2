@@ -1,6 +1,8 @@
+"use client"
 import { useState } from 'react';
-// import { ToggleSwitch } from './ToggleSwitch';
-import { ToggleSwitch } from '@/components/profile/ToggleSwitch';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
 
 export function NotificationsTab() {
   const [mealReminders, setMealReminders] = useState(true);
@@ -8,86 +10,39 @@ export function NotificationsTab() {
   const [progressSummary, setProgressSummary] = useState(false);
 
   return (
-    <div 
-      className="bg-white rounded p-6 md:p-8 border"
-      style={{ 
-        borderColor: 'rgba(113, 113, 122, 0.2)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        borderRadius: '8px'
-      }}
-    >
-      <h2 
-        className="text-2xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-      >
-        Notifications
-      </h2>
+    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
+      <h2 className="text-2xl font-bold tracking-tight mb-1">Notifications</h2>
+      <p className="text-sm text-muted-foreground mb-6">Choose what updates you want to receive</p>
 
-      <div className="space-y-6">
-        {/* Meal Reminders */}
-        <div className="flex items-start justify-between gap-4 pb-6 border-b" style={{ borderColor: 'rgba(113, 113, 122, 0.15)' }}>
-          <div className="flex-1">
-            <div 
-              className="mb-1"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              Meal Reminders
-            </div>
-            <p 
-              className="text-sm"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-            >
-              Get notified when it's time for your scheduled meals
+      <div>
+        <div className="flex items-center justify-between py-4">
+          <div className="space-y-0.5 flex-1 pr-4">
+            <Label className="text-sm font-semibold">Meal Reminders</Label>
+            <p className="text-sm text-muted-foreground">
+              Get notified when it&apos;s time for your scheduled meals
             </p>
           </div>
-          <ToggleSwitch
-            checked={mealReminders}
-            onChange={setMealReminders}
-          />
+          <Switch checked={mealReminders} onCheckedChange={setMealReminders} />
         </div>
-
-        {/* Workout Reminders */}
-        <div className="flex items-start justify-between gap-4 pb-6 border-b" style={{ borderColor: 'rgba(113, 113, 122, 0.15)' }}>
-          <div className="flex-1">
-            <div 
-              className="mb-1"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              Workout Reminders
-            </div>
-            <p 
-              className="text-sm"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-            >
+        <Separator />
+        <div className="flex items-center justify-between py-4">
+          <div className="space-y-0.5 flex-1 pr-4">
+            <Label className="text-sm font-semibold">Workout Reminders</Label>
+            <p className="text-sm text-muted-foreground">
               Receive notifications for your scheduled workout sessions
             </p>
           </div>
-          <ToggleSwitch
-            checked={workoutReminders}
-            onChange={setWorkoutReminders}
-          />
+          <Switch checked={workoutReminders} onCheckedChange={setWorkoutReminders} />
         </div>
-
-        {/* Weekly Progress Summary */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex-1">
-            <div 
-              className="mb-1"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              Weekly Progress Summary
-            </div>
-            <p 
-              className="text-sm"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-            >
+        <Separator />
+        <div className="flex items-center justify-between py-4">
+          <div className="space-y-0.5 flex-1 pr-4">
+            <Label className="text-sm font-semibold">Weekly Progress Summary</Label>
+            <p className="text-sm text-muted-foreground">
               Get a weekly email with your progress stats and achievements
             </p>
           </div>
-          <ToggleSwitch
-            checked={progressSummary}
-            onChange={setProgressSummary}
-          />
+          <Switch checked={progressSummary} onCheckedChange={setProgressSummary} />
         </div>
       </div>
     </div>

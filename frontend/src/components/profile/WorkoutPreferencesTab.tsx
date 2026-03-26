@@ -1,5 +1,11 @@
+"use client"
 import { useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { cn } from '@/lib/utils';
 
 export function WorkoutPreferencesTab() {
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(['strength', 'cardio']);
@@ -35,30 +41,13 @@ export function WorkoutPreferencesTab() {
   };
 
   return (
-    <div 
-      className="bg-white rounded p-6 md:p-8 border"
-      style={{ 
-        borderColor: 'rgba(113, 113, 122, 0.2)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        borderRadius: '8px'
-      }}
-    >
-      <h2 
-        className="text-2xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-      >
-        Workout Preferences
-      </h2>
+    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
+      <h2 className="text-2xl font-bold tracking-tight mb-1">Workout Preferences</h2>
+      <p className="text-sm text-muted-foreground mb-6">Configure your training style and schedule</p>
 
-      <div className="space-y-6">
-        {/* Workout Types */}
-        <div>
-          <label 
-            className="block text-sm mb-3"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Preferred Workout Types
-          </label>
+      <div className="space-y-5 max-w-lg">
+        <div className="space-y-2">
+          <Label>Preferred Workout Types</Label>
           <div className="flex flex-wrap gap-2">
             {types.map((type) => {
               const isSelected = workoutTypes.includes(type.id);
@@ -66,121 +55,80 @@ export function WorkoutPreferencesTab() {
                 <button
                   key={type.id}
                   onClick={() => toggleType(type.id)}
-                  className="px-4 py-2 rounded border transition-all"
-                  style={{ 
-                    borderColor: isSelected ? 'var(--nutritrack-primary)' : 'rgba(113, 113, 122, 0.3)',
-                    backgroundColor: isSelected ? 'var(--nutritrack-highlight)' : 'transparent',
-                    color: isSelected ? 'var(--nutritrack-primary)' : 'var(--nutritrack-neutral)',
-                    fontFamily: 'var(--font-sans)',
-                    borderRadius: '20px'
-                  }}
+                  className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-full"
                 >
-                  {type.label}
+                  <Badge
+                    variant={isSelected ? 'default' : 'outline'}
+                    className={cn(
+                      'cursor-pointer transition-colors text-sm px-4 py-1.5 rounded-full font-normal',
+                      !isSelected && 'hover:bg-muted hover:text-foreground'
+                    )}
+                  >
+                    {type.label}
+                  </Badge>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Days Per Week */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Workout Days Per Week
-          </label>
-          <select
-            value={daysPerWeek}
-            onChange={(e) => setDaysPerWeek(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="2">2 Days</option>
-            <option value="3">3 Days</option>
-            <option value="4">4 Days</option>
-            <option value="5">5 Days</option>
-            <option value="6">6 Days</option>
-          </select>
+        <div className="space-y-1.5">
+          <Label>Workout Days Per Week</Label>
+          <Select value={daysPerWeek} onValueChange={setDaysPerWeek}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="2">2 Days</SelectItem>
+              <SelectItem value="3">3 Days</SelectItem>
+              <SelectItem value="4">4 Days</SelectItem>
+              <SelectItem value="5">5 Days</SelectItem>
+              <SelectItem value="6">6 Days</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Session Duration */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Session Duration
-          </label>
-          <select
-            value={sessionDuration}
-            onChange={(e) => setSessionDuration(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="20-min">20-30 minutes</option>
-            <option value="45-min">30-45 minutes</option>
-            <option value="60-min">45-60 minutes</option>
-            <option value="90-min">60+ minutes</option>
-          </select>
+        <div className="space-y-1.5">
+          <Label>Session Duration</Label>
+          <Select value={sessionDuration} onValueChange={setSessionDuration}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="20-min">20-30 minutes</SelectItem>
+              <SelectItem value="45-min">30-45 minutes</SelectItem>
+              <SelectItem value="60-min">45-60 minutes</SelectItem>
+              <SelectItem value="90-min">60+ minutes</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Fitness Level */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Fitness Level
-          </label>
-          <select
-            value={fitnessLevel}
-            onChange={(e) => setFitnessLevel(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="beginner">Beginner</option>
-            <option value="intermediate">Intermediate</option>
-            <option value="advanced">Advanced</option>
-          </select>
+        <div className="space-y-1.5">
+          <Label>Fitness Level</Label>
+          <Select value={fitnessLevel} onValueChange={setFitnessLevel}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="beginner">Beginner</SelectItem>
+              <SelectItem value="intermediate">Intermediate</SelectItem>
+              <SelectItem value="advanced">Advanced</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
 
-      {/* Save Button */}
-      <div className="mt-8">
-        <button
+        <Button
           onClick={handleSave}
           disabled={isSaving || saved}
-          className="px-6 py-3 rounded transition-all flex items-center gap-2"
-          style={{ 
-            backgroundColor: 'var(--nutritrack-primary)',
-            color: 'white',
-            fontFamily: 'var(--font-sans)',
-            borderRadius: '4px',
-            opacity: isSaving || saved ? 0.7 : 1
-          }}
+          className="gap-2"
         >
           {saved ? (
             <>
-              <CheckCircle2 size={18} />
-              <span>Saved!</span>
+              <CheckCircle2 className="size-4" />
+              Saved!
             </>
-          ) : (
-            <span>{isSaving ? 'Saving...' : 'Save Changes'}</span>
-          )}
-        </button>
+          ) : isSaving ? 'Saving...' : 'Save Changes'}
+        </Button>
       </div>
     </div>
   );

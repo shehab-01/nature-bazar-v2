@@ -1,5 +1,10 @@
+"use client"
 import { useState } from 'react';
 import { CheckCircle2, AlertTriangle } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
 
 export function AccountTab() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -24,203 +29,98 @@ export function AccountTab() {
   };
 
   const canChangePassword = currentPassword && newPassword && confirmPassword && newPassword === confirmPassword;
+  const passwordMismatch = confirmPassword && newPassword !== confirmPassword;
 
   return (
-    <div 
-      className="bg-white rounded p-6 md:p-8 border"
-      style={{ 
-        borderColor: 'rgba(113, 113, 122, 0.2)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        borderRadius: '8px'
-      }}
-    >
-      <h2 
-        className="text-2xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-      >
-        Account
-      </h2>
+    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
+      <h2 className="text-2xl font-bold tracking-tight mb-1">Account</h2>
+      <p className="text-sm text-muted-foreground mb-6">Manage your security and account settings</p>
 
-      {/* Change Password Section */}
-      <div className="mb-8 pb-8 border-b" style={{ borderColor: 'rgba(113, 113, 122, 0.15)' }}>
-        <h3 
-          className="text-lg mb-4"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-        >
-          Change Password
-        </h3>
-
-        <div className="space-y-4 max-w-md">
-          {/* Current Password */}
-          <div>
-            <label 
-              className="block text-sm mb-2"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              Current Password
-            </label>
-            <input
+      {/* Change Password */}
+      <div className="space-y-4">
+        <h3 className="text-base font-semibold">Change Password</h3>
+        <div className="space-y-3 max-w-sm">
+          <div className="space-y-1.5">
+            <Label htmlFor="current-password">Current Password</Label>
+            <Input
+              id="current-password"
               type="password"
               value={currentPassword}
               onChange={(e) => setCurrentPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded border"
-              style={{ 
-                borderColor: 'rgba(113, 113, 122, 0.3)',
-                fontFamily: 'var(--font-sans)',
-                borderRadius: '4px'
-              }}
             />
           </div>
-
-          {/* New Password */}
-          <div>
-            <label 
-              className="block text-sm mb-2"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              New Password
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="new-password">New Password</Label>
+            <Input
+              id="new-password"
               type="password"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded border"
-              style={{ 
-                borderColor: 'rgba(113, 113, 122, 0.3)',
-                fontFamily: 'var(--font-sans)',
-                borderRadius: '4px'
-              }}
             />
           </div>
-
-          {/* Confirm Password */}
-          <div>
-            <label 
-              className="block text-sm mb-2"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-            >
-              Confirm New Password
-            </label>
-            <input
+          <div className="space-y-1.5">
+            <Label htmlFor="confirm-password">Confirm New Password</Label>
+            <Input
+              id="confirm-password"
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              className="w-full px-4 py-3 rounded border"
-              style={{ 
-                borderColor: 'rgba(113, 113, 122, 0.3)',
-                fontFamily: 'var(--font-sans)',
-                borderRadius: '4px'
-              }}
+              aria-invalid={!!passwordMismatch}
             />
-            {confirmPassword && newPassword !== confirmPassword && (
-              <p 
-                className="text-xs mt-1"
-                style={{ fontFamily: 'var(--font-sans)', color: '#DC2626' }}
-              >
-                Passwords do not match
-              </p>
+            {passwordMismatch && (
+              <p className="text-xs text-destructive">Passwords do not match</p>
             )}
           </div>
-
-          {/* Change Password Button */}
-          <button
+          <Button
             onClick={handlePasswordChange}
             disabled={!canChangePassword || isChangingPassword || passwordChanged}
-            className="px-6 py-3 rounded transition-all flex items-center gap-2"
-            style={{ 
-              backgroundColor: canChangePassword ? 'var(--nutritrack-primary)' : 'rgba(113, 113, 122, 0.3)',
-              color: 'white',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px',
-              cursor: canChangePassword ? 'pointer' : 'not-allowed',
-              opacity: isChangingPassword || passwordChanged ? 0.7 : 1
-            }}
+            className="gap-2"
           >
             {passwordChanged ? (
               <>
-                <CheckCircle2 size={18} />
-                <span>Password Changed!</span>
+                <CheckCircle2 className="size-4" />
+                Password Changed!
               </>
-            ) : (
-              <span>{isChangingPassword ? 'Updating...' : 'Change Password'}</span>
-            )}
-          </button>
+            ) : isChangingPassword ? 'Updating...' : 'Change Password'}
+          </Button>
         </div>
       </div>
 
-      {/* Delete Account Section */}
-      <div>
-        <h3 
-          className="text-lg mb-2"
-          style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-        >
-          Delete Account
-        </h3>
-        <p 
-          className="text-sm mb-4"
-          style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-        >
+      <Separator className="my-6" />
+
+      {/* Delete Account */}
+      <div className="space-y-2">
+        <h3 className="text-base font-semibold">Delete Account</h3>
+        <p className="text-sm text-muted-foreground">
           Permanently delete your account and all associated data
         </p>
 
         {!showDeleteConfirm ? (
-          <button
+          <Button
+            variant="destructive"
             onClick={() => setShowDeleteConfirm(true)}
-            className="text-sm underline transition-opacity hover:opacity-70"
-            style={{ fontFamily: 'var(--font-sans)', color: '#DC2626' }}
+            className="mt-1"
           >
-            Delete my account
-          </button>
+            Delete Account
+          </Button>
         ) : (
-          <div 
-            className="p-4 rounded border"
-            style={{ 
-              borderColor: '#DC2626',
-              backgroundColor: 'rgba(220, 38, 38, 0.05)',
-              borderRadius: '6px'
-            }}
-          >
-            <div className="flex items-start gap-3 mb-4">
-              <AlertTriangle size={20} style={{ color: '#DC2626', flexShrink: 0, marginTop: '2px' }} />
+          <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-4 space-y-3 max-w-sm">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="size-4 text-destructive shrink-0 mt-0.5" />
               <div>
-                <div 
-                  className="mb-1"
-                  style={{ fontFamily: 'var(--font-sans)', color: '#DC2626' }}
-                >
-                  Are you sure?
-                </div>
-                <p 
-                  className="text-sm"
-                  style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-                >
+                <p className="text-sm font-medium text-destructive">Are you sure?</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
                   This action cannot be undone. All your data will be permanently deleted.
                 </p>
               </div>
             </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 rounded border transition-all text-sm"
-                style={{ 
-                  borderColor: 'rgba(113, 113, 122, 0.3)',
-                  color: 'var(--nutritrack-neutral)',
-                  fontFamily: 'var(--font-sans)',
-                  borderRadius: '4px'
-                }}
-              >
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>
                 Cancel
-              </button>
-              <button
-                className="px-4 py-2 rounded transition-all text-sm"
-                style={{ 
-                  backgroundColor: '#DC2626',
-                  color: 'white',
-                  fontFamily: 'var(--font-sans)',
-                  borderRadius: '4px'
-                }}
-              >
+              </Button>
+              <Button variant="destructive" size="sm">
                 Yes, delete my account
-              </button>
+              </Button>
             </div>
           </div>
         )}

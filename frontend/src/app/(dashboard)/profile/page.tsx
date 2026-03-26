@@ -26,28 +26,16 @@ export function ProfileSettingsPage() {
   };
 
   return (
-    <div className="flex-1 pb-20 lg:pb-0">
-      <div className="px-6 md:px-12 py-8 md:py-12 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1
-            className="text-4xl md:text-5xl mb-2"
-            style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-          >
-            Settings
-          </h1>
-          <p
-            className="text-lg"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-          >
-            Manage your profile and preferences
-          </p>
-        </div>
+    <div className="flex flex-col flex-1 px-4 md:px-8 py-6 md:py-8 max-w-5xl mx-auto w-full min-h-0">
+      <div className="mb-6">
+        <h1 className="text-4xl md:text-5xl tracking-tight font-display">Settings</h1>
+        <p className="text-muted-foreground mt-1 ">Manage your profile and preferences</p>
+      </div>
 
-        {/* Two Column Layout */}
-        <div className="flex flex-col lg:flex-row gap-6">
-          <SettingsTabs activeTab={activeTab} setActiveTab={setActiveTab} />
-          <div className="flex-1">{renderTabContent()}</div>
+      <div className="flex flex-col lg:flex-row gap-6 flex-1 items-stretch">
+        <SettingsTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+        <div className="flex-1 min-w-0 flex">
+          {renderTabContent()}
         </div>
       </div>
     </div>

@@ -1,5 +1,10 @@
+"use client"
 import { useState } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export function BodyGoalsTab() {
   const [age, setAge] = useState('32');
@@ -12,187 +17,98 @@ export function BodyGoalsTab() {
 
   const handleRecalculate = () => {
     setIsRecalculating(true);
-    setTimeout(() => {
-      setIsRecalculating(false);
-    }, 2000);
+    setTimeout(() => setIsRecalculating(false), 2000);
   };
 
   return (
-    <div 
-      className="bg-white rounded p-6 md:p-8 border"
-      style={{ 
-        borderColor: 'rgba(113, 113, 122, 0.2)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        borderRadius: '8px'
-      }}
-    >
-      <h2 
-        className="text-2xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-      >
-        Body & Goals
-      </h2>
+    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
+      <h2 className="text-2xl font-bold tracking-tight mb-1">Body & Goals</h2>
+      <p className="text-sm text-muted-foreground mb-6">Set your physical stats and fitness goals</p>
 
-      <div className="space-y-6">
-        {/* Age */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Age
-          </label>
-          <input
-            type="number"
-            value={age}
-            onChange={(e) => setAge(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          />
+      <div className="space-y-4 max-w-lg">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <Label htmlFor="age">Age</Label>
+            <Input
+              id="age"
+              type="number"
+              value={age}
+              onChange={(e) => setAge(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="height">Height</Label>
+            <Input
+              id="height"
+              type="text"
+              value={height}
+              onChange={(e) => setHeight(e.target.value)}
+              placeholder="e.g., 5'6&quot; or 168 cm"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="current-weight">Current Weight (lbs)</Label>
+            <Input
+              id="current-weight"
+              type="number"
+              value={currentWeight}
+              onChange={(e) => setCurrentWeight(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="target-weight">Target Weight (lbs)</Label>
+            <Input
+              id="target-weight"
+              type="number"
+              value={targetWeight}
+              onChange={(e) => setTargetWeight(e.target.value)}
+            />
+          </div>
         </div>
 
-        {/* Height */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Height
-          </label>
-          <input
-            type="text"
-            value={height}
-            onChange={(e) => setHeight(e.target.value)}
-            placeholder="e.g., 5'6&quot; or 168 cm"
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          />
+        <div className="space-y-1.5">
+          <Label>Primary Goal</Label>
+          <Select value={goal} onValueChange={setGoal}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="lose-weight">Lose Weight</SelectItem>
+              <SelectItem value="gain-muscle">Gain Muscle</SelectItem>
+              <SelectItem value="maintain">Maintain Weight</SelectItem>
+              <SelectItem value="tone">Tone & Define</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Current Weight */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Current Weight (lbs)
-          </label>
-          <input
-            type="number"
-            value={currentWeight}
-            onChange={(e) => setCurrentWeight(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          />
+        <div className="space-y-1.5">
+          <Label>Timeline</Label>
+          <Select value={timeline} onValueChange={setTimeline}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="1-month">1 Month</SelectItem>
+              <SelectItem value="3-months">3 Months</SelectItem>
+              <SelectItem value="6-months">6 Months</SelectItem>
+              <SelectItem value="1-year">1 Year</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
-        {/* Target Weight */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
+        <div className="pt-1">
+          <Button
+            onClick={handleRecalculate}
+            disabled={isRecalculating}
+            className="gap-2"
           >
-            Target Weight (lbs)
-          </label>
-          <input
-            type="number"
-            value={targetWeight}
-            onChange={(e) => setTargetWeight(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          />
+            <RefreshCw className={`size-4 ${isRecalculating ? 'animate-spin' : ''}`} />
+            {isRecalculating ? 'Recalculating...' : 'Recalculate My Plan'}
+          </Button>
+          <p className="text-xs text-muted-foreground mt-2">
+            This will regenerate your diet and workout plans based on your updated goals
+          </p>
         </div>
-
-        {/* Goal */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Primary Goal
-          </label>
-          <select
-            value={goal}
-            onChange={(e) => setGoal(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="lose-weight">Lose Weight</option>
-            <option value="gain-muscle">Gain Muscle</option>
-            <option value="maintain">Maintain Weight</option>
-            <option value="tone">Tone & Define</option>
-          </select>
-        </div>
-
-        {/* Timeline */}
-        <div>
-          <label 
-            className="block text-sm mb-2"
-            style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-text)' }}
-          >
-            Timeline
-          </label>
-          <select
-            value={timeline}
-            onChange={(e) => setTimeline(e.target.value)}
-            className="w-full px-4 py-3 rounded border"
-            style={{ 
-              borderColor: 'rgba(113, 113, 122, 0.3)',
-              fontFamily: 'var(--font-sans)',
-              borderRadius: '4px'
-            }}
-          >
-            <option value="1-month">1 Month</option>
-            <option value="3-months">3 Months</option>
-            <option value="6-months">6 Months</option>
-            <option value="1-year">1 Year</option>
-          </select>
-        </div>
-      </div>
-
-      {/* Recalculate Button */}
-      <div className="mt-8">
-        <button
-          onClick={handleRecalculate}
-          disabled={isRecalculating}
-          className="px-6 py-3 rounded transition-all flex items-center gap-2"
-          style={{ 
-            backgroundColor: 'var(--nutritrack-primary)',
-            color: 'white',
-            fontFamily: 'var(--font-sans)',
-            borderRadius: '4px',
-            opacity: isRecalculating ? 0.7 : 1
-          }}
-        >
-          <RefreshCw size={18} className={isRecalculating ? 'animate-spin' : ''} />
-          <span>{isRecalculating ? 'Recalculating...' : 'Recalculate My Plan'}</span>
-        </button>
-        <p 
-          className="text-sm mt-2"
-          style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-        >
-          This will regenerate your diet and workout plans based on your updated goals
-        </p>
       </div>
     </div>
   );
