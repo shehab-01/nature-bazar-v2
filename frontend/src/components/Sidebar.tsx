@@ -2,16 +2,17 @@
 
 import * as React from "react";
 import {
-  AudioWaveform,
   BookOpen,
   Bot,
-  Command,
-  Frame,
   GalleryVerticalEnd,
-  Map,
-  PieChart,
   Settings2,
   SquareTerminal,
+  LayoutDashboard,
+  ChartNoAxesCombined,
+  Dumbbell,
+  Apple,
+  Scroll,
+  User,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -131,27 +132,32 @@ const data = {
     {
       name: "Dashboard",
       url: "/dashboard",
-      icon: Frame,
+      icon: LayoutDashboard,
     },
     {
       name: "Diet Chart",
       url: "/dietChart",
-      icon: PieChart,
+      icon: Scroll,
     },
     {
       name: "Meal Plan",
       url: "/mealPlan",
-      icon: PieChart,
+      icon: Apple,
     },
     {
       name: "Workout",
       url: "/workout",
-      icon: PieChart,
+      icon: Dumbbell,
     },
     {
       name: "Progerss",
       url: "/progress",
-      icon: PieChart,
+      icon: ChartNoAxesCombined ,
+    },
+    {
+      name: "Profile",
+      url: "/profile",
+      icon: User,
     },
     // {
     //   name: "Travel",
