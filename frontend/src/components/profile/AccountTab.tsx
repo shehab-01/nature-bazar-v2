@@ -4,7 +4,20 @@ import { CheckCircle2, AlertTriangle } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+
+function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b last:border-b-0">
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+      </div>
+      <div className="md:col-span-2 space-y-4">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function AccountTab() {
   const [currentPassword, setCurrentPassword] = useState('');
@@ -32,31 +45,19 @@ export function AccountTab() {
   const passwordMismatch = confirmPassword && newPassword !== confirmPassword;
 
   return (
-    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
-      <h2 className="text-2xl font-bold tracking-tight mb-1">Account</h2>
-      <p className="text-sm text-muted-foreground mb-6">Manage your security and account settings</p>
+    <div>
+      <h2 className="text-lg font-bold mb-1">Account</h2>
+      <p className="text-sm text-muted-foreground mb-6">Manage your security and account settings.</p>
 
-      {/* Change Password */}
-      <div className="space-y-4">
-        <h3 className="text-base font-semibold">Change Password</h3>
+      <Section title="Change Password" description="Update your password to keep your account secure">
         <div className="space-y-3 max-w-sm">
           <div className="space-y-1.5">
             <Label htmlFor="current-password">Current Password</Label>
-            <Input
-              id="current-password"
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-            />
+            <Input id="current-password" type="password" value={currentPassword} onChange={(e) => setCurrentPassword(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="new-password">New Password</Label>
-            <Input
-              id="new-password"
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-            />
+            <Input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="confirm-password">Confirm New Password</Label>
@@ -67,40 +68,17 @@ export function AccountTab() {
               onChange={(e) => setConfirmPassword(e.target.value)}
               aria-invalid={!!passwordMismatch}
             />
-            {passwordMismatch && (
-              <p className="text-xs text-destructive">Passwords do not match</p>
-            )}
+            {passwordMismatch && <p className="text-xs text-destructive">Passwords do not match</p>}
           </div>
-          <Button
-            onClick={handlePasswordChange}
-            disabled={!canChangePassword || isChangingPassword || passwordChanged}
-            className="gap-2"
-          >
-            {passwordChanged ? (
-              <>
-                <CheckCircle2 className="size-4" />
-                Password Changed!
-              </>
-            ) : isChangingPassword ? 'Updating...' : 'Change Password'}
+          <Button onClick={handlePasswordChange} disabled={!canChangePassword || isChangingPassword || passwordChanged} className="gap-2">
+            {passwordChanged ? <><CheckCircle2 className="size-4" />Password Changed!</> : isChangingPassword ? 'Updating...' : 'Change Password'}
           </Button>
         </div>
-      </div>
+      </Section>
 
-      <Separator className="my-6" />
-
-      {/* Delete Account */}
-      <div className="space-y-2">
-        <h3 className="text-base font-semibold">Delete Account</h3>
-        <p className="text-sm text-muted-foreground">
-          Permanently delete your account and all associated data
-        </p>
-
+      <Section title="Delete Account" description="Permanently delete your account and all associated data">
         {!showDeleteConfirm ? (
-          <Button
-            variant="destructive"
-            onClick={() => setShowDeleteConfirm(true)}
-            className="mt-1"
-          >
+          <Button variant="destructive" onClick={() => setShowDeleteConfirm(true)}>
             Delete Account
           </Button>
         ) : (
@@ -115,16 +93,12 @@ export function AccountTab() {
               </div>
             </div>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" size="sm">
-                Yes, delete my account
-              </Button>
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>Cancel</Button>
+              <Button variant="destructive" size="sm">Yes, delete my account</Button>
             </div>
           </div>
         )}
-      </div>
+      </Section>
     </div>
   );
 }

@@ -5,20 +5,33 @@ import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+
+function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
+  return (
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 py-6 border-b last:border-b-0">
+      <div>
+        <h3 className="text-sm font-semibold">{title}</h3>
+        {description && <p className="text-sm text-muted-foreground mt-1">{description}</p>}
+      </div>
+      <div className="md:col-span-2 space-y-4">
+        {children}
+      </div>
+    </div>
+  );
+}
 
 export function MyProfileTab() {
   const [name, setName] = useState('Sarah Johnson');
   const [email, setEmail] = useState('sarah.johnson@email.com');
+  const [sex, setSex] = useState('female');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const url = URL.createObjectURL(file);
-      setAvatarUrl(url);
-    }
+    if (file) setAvatarUrl(URL.createObjectURL(file));
   };
 
   const handleSave = () => {
@@ -33,65 +46,56 @@ export function MyProfileTab() {
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
 
   return (
-    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
-      <h2 className="text-2xl font-bold tracking-tight mb-1">My Profile</h2>
-      <p className="text-sm text-muted-foreground mb-6">Update your personal information</p>
+    <div>
+      <h2 className="text-lg font-bold mb-1">My Profile</h2>
+      <p className="text-sm text-muted-foreground mb-6">Update your personal information.</p>
 
-      {/* Avatar Upload */}
-      <div className="flex items-center gap-4 mb-6">
-        <label className="cursor-pointer group relative">
-          <Avatar className="size-20">
-            <AvatarImage src={avatarUrl} alt={name} />
-            <AvatarFallback className="text-lg bg-primary/10 text-primary">{initials}</AvatarFallback>
-          </Avatar>
-          <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <Camera className="size-5 text-white" />
+      <Section title="Profile Photo" description="Update your profile picture">
+        <div className="flex items-center gap-4">
+          <label className="cursor-pointer group relative">
+            <Avatar className="size-16">
+              <AvatarImage src={avatarUrl} alt={name} />
+              <AvatarFallback className="text-base bg-primary/10 text-primary">{initials}</AvatarFallback>
+            </Avatar>
+            <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+              <Camera className="size-4 text-white" />
+            </div>
+            <input type="file" accept="image/*" onChange={handleAvatarUpload} className="sr-only" />
+          </label>
+          <div>
+            <p className="text-sm font-medium">Click to upload a new photo</p>
+            <p className="text-xs text-muted-foreground mt-0.5">PNG, JPG up to 5MB</p>
           </div>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={handleAvatarUpload}
-            className="sr-only"
-          />
-        </label>
-        <div>
-          <p className="text-sm font-medium">Profile Photo</p>
-          <p className="text-sm text-muted-foreground">Click to upload a new photo</p>
         </div>
-      </div>
+      </Section>
 
-      <div className="space-y-4 max-w-lg">
+      <Section title="Personal Information" description="Your name and contact details">
         <div className="space-y-1.5">
           <Label htmlFor="name">Full Name</Label>
-          <Input
-            id="name"
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
+          <Input id="name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="max-w-sm" />
         </div>
-
         <div className="space-y-1.5">
           <Label htmlFor="email">Email Address</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+          <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="max-w-sm" />
         </div>
+        <div className="space-y-1.5">
+          <Label>Sex</Label>
+          <Select value={sex} onValueChange={setSex}>
+            <SelectTrigger className="max-w-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="male">Male</SelectItem>
+              <SelectItem value="female">Female</SelectItem>
+              <SelectItem value="other">Other / Prefer not to say</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </Section>
 
-        <Button
-          onClick={handleSave}
-          disabled={isSaving || saved}
-          className="gap-2 mt-2"
-        >
-          {saved ? (
-            <>
-              <CheckCircle2 className="size-4" />
-              Saved!
-            </>
-          ) : isSaving ? 'Saving...' : 'Save Changes'}
+      <div className="flex justify-end pt-6">
+        <Button onClick={handleSave} disabled={isSaving || saved} className="gap-2">
+          {saved ? <><CheckCircle2 className="size-4" />Saved!</> : isSaving ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
     </div>

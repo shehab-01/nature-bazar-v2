@@ -2,7 +2,24 @@
 import { useState } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Separator } from '@/components/ui/separator';
+
+function NotificationCard({ id, title, description, checked, onCheckedChange }: {
+  id: string;
+  title: string;
+  description: string;
+  checked: boolean;
+  onCheckedChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between px-4 py-4 border rounded-lg bg-white">
+      <div>
+        <Label htmlFor={id} className="text-sm font-semibold cursor-pointer">{title}</Label>
+        <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
+      </div>
+      <Switch id={id} checked={checked} onCheckedChange={onCheckedChange} className="ml-6 shrink-0" />
+    </div>
+  );
+}
 
 export function NotificationsTab() {
   const [mealReminders, setMealReminders] = useState(true);
@@ -10,40 +27,32 @@ export function NotificationsTab() {
   const [progressSummary, setProgressSummary] = useState(false);
 
   return (
-    <div className="flex-1 bg-white rounded-2xl p-6 md:p-8">
-      <h2 className="text-2xl font-bold tracking-tight mb-1">Notifications</h2>
-      <p className="text-sm text-muted-foreground mb-6">Choose what updates you want to receive</p>
+    <div>
+      <h2 className="text-lg font-bold mb-1">Notifications</h2>
+      <p className="text-sm text-muted-foreground mb-5">Manage how you receive notifications.</p>
 
-      <div>
-        <div className="flex items-center justify-between py-4">
-          <div className="space-y-0.5 flex-1 pr-4">
-            <Label className="text-sm font-semibold">Meal Reminders</Label>
-            <p className="text-sm text-muted-foreground">
-              Get notified when it&apos;s time for your scheduled meals
-            </p>
-          </div>
-          <Switch checked={mealReminders} onCheckedChange={setMealReminders} />
-        </div>
-        <Separator />
-        <div className="flex items-center justify-between py-4">
-          <div className="space-y-0.5 flex-1 pr-4">
-            <Label className="text-sm font-semibold">Workout Reminders</Label>
-            <p className="text-sm text-muted-foreground">
-              Receive notifications for your scheduled workout sessions
-            </p>
-          </div>
-          <Switch checked={workoutReminders} onCheckedChange={setWorkoutReminders} />
-        </div>
-        <Separator />
-        <div className="flex items-center justify-between py-4">
-          <div className="space-y-0.5 flex-1 pr-4">
-            <Label className="text-sm font-semibold">Weekly Progress Summary</Label>
-            <p className="text-sm text-muted-foreground">
-              Get a weekly email with your progress stats and achievements
-            </p>
-          </div>
-          <Switch checked={progressSummary} onCheckedChange={setProgressSummary} />
-        </div>
+      <div className="space-y-3 max-w-2xl">
+        <NotificationCard
+          id="meal-reminders"
+          title="Meal Reminders"
+          description="Get notified when it's time for your scheduled meals"
+          checked={mealReminders}
+          onCheckedChange={setMealReminders}
+        />
+        <NotificationCard
+          id="workout-reminders"
+          title="Workout Reminders"
+          description="Receive notifications for your scheduled workout sessions"
+          checked={workoutReminders}
+          onCheckedChange={setWorkoutReminders}
+        />
+        <NotificationCard
+          id="progress-summary"
+          title="Weekly Progress Summary"
+          description="Get a weekly email with your progress stats and achievements"
+          checked={progressSummary}
+          onCheckedChange={setProgressSummary}
+        />
       </div>
     </div>
   );
