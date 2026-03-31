@@ -1,3 +1,4 @@
+import { Profile } from "@/types/profiles";
 import axiosInstance from "./axiosInstance";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -95,3 +96,14 @@ export const auth = {
   // login: async (email: string, password: string): Promise<AuthResponse> => { ... }
   // signup: async (payload: SignupPayload): Promise<AuthResponse> => { ... }
 };
+
+// Profile
+
+export const profile = {
+  getProfile: async (userId: string): Promise<Profile> => {
+    const {data} = await axiosInstance.get<{data : Profile }> ("/api/v1/profile",{
+      params: {user_id : userId}
+    });
+    return data.data
+  }
+}

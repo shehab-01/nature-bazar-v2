@@ -1,5 +1,3 @@
-import asyncio
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from database import AsyncSessionLocal
 
@@ -45,11 +43,13 @@ DAY_TOTALS_QUERY = text("""
 
 
 async def get_week_meal_plan(user_id: str, week_start_date: str) -> dict:
+    params = {"user_id": user_id, "week_start_date": week_start_date}
+
     async with AsyncSessionLocal() as session:
-        entries_result, totals_result = await asyncio.gather(
-            session.execute(MEAL_ENTRIES_QUERY, {"user_id": user_id, "week_start_date": week_start_date}),
-            session.execute(DAY_TOTALS_QUERY, {"user_id": user_id, "week_start_date": week_start_date}),
-        )
+        # AsyncSession is NOT concurrency-safe — execute sequentially,
+        # never via asyncio.gather on the same session instance.
+        entries_result = await session.execute(MEAL_ENTRIES_QUERY, params)
+        totals_result = await session.execute(DAY_TOTALS_QUERY, params)
 
         entries = [
             {**row._asdict(), "entry_id": str(row.entry_id)}

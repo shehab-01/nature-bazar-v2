@@ -1,5 +1,5 @@
 "use client"
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AccountTab } from '@/components/profile/AccountTab';
 import { BodyGoalsTab } from '@/components/profile/BodyGoalsTab';
 import { DietPreferencesTab } from '@/components/profile/DietPreferencesTab';
@@ -9,10 +9,22 @@ import { NotificationsTab } from '@/components/profile/NotificationsTab';
 import { WorkoutPreferencesTab } from '@/components/profile/WorkoutPreferencesTab';
 import { SettingsTabs } from '@/components/profile/SettingsTabs';
 
+import { profile } from '@/app/lib/api';
+const USERID = '00000000-0000-0000-0000-000000000001'
+
 export type SettingsTab = 'profile' | 'body-goals' | 'health' | 'diet' | 'workout' | 'notifications' | 'account';
 
 export function ProfileSettingsPage() {
   const [activeTab, setActiveTab] = useState<SettingsTab>('profile');
+
+  useEffect(() =>{
+    const fetchProfile = async () =>{
+
+      const data = await  profile.getProfile(USERID)
+      console.log(data)
+    }
+    fetchProfile()
+  }, [])
 
   const renderTabContent = () => {
     switch (activeTab) {
