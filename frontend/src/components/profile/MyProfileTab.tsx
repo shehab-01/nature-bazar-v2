@@ -1,11 +1,16 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Camera, CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { User } from '@/types/profiles';
+
+interface MyProfileTab {
+  userData : User | null | undefined
+}
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -21,10 +26,10 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-export function MyProfileTab() {
-  const [name, setName] = useState('Sarah Johnson');
-  const [email, setEmail] = useState('sarah.johnson@email.com');
-  const [sex, setSex] = useState('female');
+export function MyProfileTab({userData}: MyProfileTab) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [sex, setSex] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -44,6 +49,15 @@ export function MyProfileTab() {
   };
 
   const initials = name.split(' ').map(n => n[0]).join('').toUpperCase();
+
+  useEffect(() =>{
+    if(userData){
+      setName(userData.name)
+      setEmail(userData.email)
+      setSex(userData.sex)
+      setAvatarUrl(userData.avatar_url?? '')
+    }
+  }, [userData])
 
   return (
     <div>

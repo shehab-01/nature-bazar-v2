@@ -1,11 +1,17 @@
 "use client"
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+
+import { Health } from '@/types/profiles';
+
+interface HealthTab {
+  healthData : Health | null | undefined
+}
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -21,7 +27,7 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-export function HealthTab() {
+export function HealthTab({healthData}: HealthTab) {
   const [conditions, setConditions] = useState<string[]>([]);
   const [otherCondition, setOtherCondition] = useState('');
   const [medications, setMedications] = useState('');
@@ -84,6 +90,16 @@ export function HealthTab() {
       setTimeout(() => setSaved(false), 2000);
     }, 800);
   };
+
+  useEffect(() => {
+  if (healthData) {
+    setConditions(healthData.medical_conditions);
+    setOtherCondition(healthData.other_medical_condition ?? '');
+    setMedications(healthData.medications ?? '');
+    setAllergies(healthData.food_allergies);
+    setOtherAllergy(healthData.other_food_allergy ?? '');
+  }
+}, [healthData]);
 
   return (
     <div>
