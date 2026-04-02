@@ -1,7 +1,13 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+
+import {NotificationPreferences} from '@/types/profiles'
+
+interface NotificationTab {
+  notificationData : NotificationPreferences | null | undefined
+}
 
 function NotificationCard({ id, title, description, checked, onCheckedChange }: {
   id: string;
@@ -21,10 +27,18 @@ function NotificationCard({ id, title, description, checked, onCheckedChange }: 
   );
 }
 
-export function NotificationsTab() {
+export function NotificationsTab({notificationData}: NotificationTab ) {
   const [mealReminders, setMealReminders] = useState(true);
   const [workoutReminders, setWorkoutReminders] = useState(true);
   const [progressSummary, setProgressSummary] = useState(false);
+
+useEffect(() =>{
+  if (notificationData){
+    setMealReminders(notificationData.meal_reminders)
+    setWorkoutReminders(notificationData.workout_reminders)
+    setProgressSummary(notificationData.weekly_progress_summary)
+  }
+})
 
   return (
     <div>

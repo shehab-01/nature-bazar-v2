@@ -1,11 +1,17 @@
 "use client"
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+
+import { WorkoutPreferences } from '@/types/profiles';
+
+interface WorkoutTab {
+  workoutData : WorkoutPreferences | null | undefined
+}
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -21,19 +27,19 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-export function WorkoutPreferencesTab() {
+export function WorkoutPreferencesTab({workoutData}: WorkoutTab) {
   const [workoutTypes, setWorkoutTypes] = useState<string[]>(['strength', 'cardio']);
   const [daysPerWeek, setDaysPerWeek] = useState('4');
   const [sessionDuration, setSessionDuration] = useState('45-min');
   const [fitnessLevel, setFitnessLevel] = useState('intermediate');
-  const [activityLevel, setActivityLevel] = useState('lightly-active');
+  const [activityLevel, setActivityLevel] = useState('');
   const [sleepHours, setSleepHours] = useState('7-8');
   const [stressLevel, setStressLevel] = useState('moderate');
   const [isSaving, setIsSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   const types = [
-    { id: 'strength', label: 'Strength Training' },
+    { id: 'strength_training', label: 'Strength Training' },
     { id: 'cardio', label: 'Cardio' },
     { id: 'yoga', label: 'Yoga & Flexibility' },
     { id: 'hiit', label: 'HIIT' },
@@ -56,6 +62,18 @@ export function WorkoutPreferencesTab() {
       setTimeout(() => setSaved(false), 2000);
     }, 800);
   };
+
+  useEffect(()=>{
+    if(workoutData){
+      setWorkoutTypes(workoutData?.workout_styles)
+      setDaysPerWeek(workoutData?.workout_days_per_week)
+      setSessionDuration(workoutData?.session_duration)
+      setFitnessLevel(workoutData?.fitness_level)
+      setActivityLevel(workoutData?.activity_level)
+      setSleepHours(workoutData?.avg_sleep_hours)
+      setStressLevel(workoutData?.stress_level)
+    }
+  })
 
   return (
     <div>
@@ -124,10 +142,10 @@ export function WorkoutPreferencesTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="20-min">20–30 minutes</SelectItem>
-                <SelectItem value="45-min">30–45 minutes</SelectItem>
-                <SelectItem value="60-min">45–60 minutes</SelectItem>
-                <SelectItem value="90-min">60+ minutes</SelectItem>
+                <SelectItem value="20_30_min">20–30 minutes</SelectItem>
+                <SelectItem value="30_45_min">30–45 minutes</SelectItem>
+                <SelectItem value="45_60_min">45–60 minutes</SelectItem>
+                <SelectItem value="60+_min">60+ minutes</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -144,10 +162,10 @@ export function WorkoutPreferencesTab() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sedentary">Sedentary (desk job, little movement)</SelectItem>
-                <SelectItem value="lightly-active">Lightly Active (1–3 days/week)</SelectItem>
-                <SelectItem value="moderately-active">Moderately Active (3–5 days/week)</SelectItem>
-                <SelectItem value="very-active">Very Active (6–7 days/week)</SelectItem>
-                <SelectItem value="extra-active">Extra Active (physical job + training)</SelectItem>
+                <SelectItem value="lightly_active">Lightly Active (1–3 days/week)</SelectItem>
+                <SelectItem value="moderately_active">Moderately Active (3–5 days/week)</SelectItem>
+                <SelectItem value="very_active">Very Active (6–7 days/week)</SelectItem>
+                <SelectItem value="extra_active">Extra Active (physical job + training)</SelectItem>
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">Used to calculate your daily calorie needs</p>
@@ -159,9 +177,9 @@ export function WorkoutPreferencesTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="less-5">Less than 5 hours</SelectItem>
-                <SelectItem value="5-6">5–6 hours</SelectItem>
-                <SelectItem value="7-8">7–8 hours</SelectItem>
+                <SelectItem value="less_5">Less than 5 hours</SelectItem>
+                <SelectItem value="5_6">5–6 hours</SelectItem>
+                <SelectItem value="7_8">7–8 hours</SelectItem>
                 <SelectItem value="9+">9+ hours</SelectItem>
               </SelectContent>
             </Select>
@@ -176,7 +194,7 @@ export function WorkoutPreferencesTab() {
                 <SelectItem value="low">Low (generally relaxed)</SelectItem>
                 <SelectItem value="moderate">Moderate (occasional stress)</SelectItem>
                 <SelectItem value="high">High (frequent stress)</SelectItem>
-                <SelectItem value="very-high">Very High (chronic stress)</SelectItem>
+                <SelectItem value="very_high">Very High (chronic stress)</SelectItem>
               </SelectContent>
             </Select>
           </div>

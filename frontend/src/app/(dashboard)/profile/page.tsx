@@ -36,8 +36,8 @@ export function ProfileSettingsPage() {
       case 'body-goals':    return <BodyGoalsTab bodyGoalData= {profileData?.body_goals} />;
       case 'health':        return <HealthTab healthData = {profileData?.health} />;
       case 'diet':          return <DietPreferencesTab dietData = {profileData?.diet_preferences} />;
-      case 'workout':       return <WorkoutPreferencesTab />;
-      case 'notifications': return <NotificationsTab />;
+      case 'workout':       return <WorkoutPreferencesTab workoutData = {profileData?.workout_preferences} />;
+      case 'notifications': return <NotificationsTab notificationData = { profileData?.notification_preferences} />;
       case 'account':       return <AccountTab />;
       default:              return <MyProfileTab userData={profileData?.user}/>;
     }

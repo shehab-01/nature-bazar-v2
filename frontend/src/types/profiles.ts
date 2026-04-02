@@ -49,7 +49,7 @@ export interface DietPreferences {
 export interface WorkoutPreferences {
   workout_styles: string[];
   fitness_level: "beginner" | "intermediate" | "advanced";
-  workout_days_per_week: number;
+  workout_days_per_week: string;
   session_duration: string;
   activity_level: "sedentary" | "lightly_active" | "moderately_active" | "very_active";
   avg_sleep_hours: string;

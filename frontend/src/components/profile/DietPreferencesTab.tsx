@@ -1,5 +1,5 @@
 "use client"
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import {DietPreferences} from '@/types/profiles'
+
+interface DietTab {
+  dietData : DietPreferences | null | undefined
+}
 
 function Section({ title, description, children }: { title: string; description?: string; children: React.ReactNode }) {
   return (
@@ -22,7 +27,7 @@ function Section({ title, description, children }: { title: string; description?
   );
 }
 
-export function DietPreferencesTab() {
+export function DietPreferencesTab({dietData}: DietTab) {
   const [dietaryRestrictions, setDietaryRestrictions] = useState<string[]>(['gluten-free']);
   const [culturalRestrictions, setCulturalRestrictions] = useState<string[]>([]);
   const [mealsPerDay, setMealsPerDay] = useState('4');
@@ -38,8 +43,8 @@ export function DietPreferencesTab() {
     { id: 'none', label: 'No Restrictions' },
     { id: 'vegetarian', label: 'Vegetarian' },
     { id: 'vegan', label: 'Vegan' },
-    { id: 'gluten-free', label: 'Gluten-Free' },
-    { id: 'dairy-free', label: 'Dairy-Free' },
+    { id: 'gluten_free', label: 'Gluten-Free' },
+    { id: 'dairy_free', label: 'Dairy-Free' },
     { id: 'keto', label: 'Keto' },
     { id: 'paleo', label: 'Paleo' },
   ];
@@ -47,7 +52,7 @@ export function DietPreferencesTab() {
   const culturalOptions = [
     { id: 'halal', label: 'Halal' },
     { id: 'kosher', label: 'Kosher' },
-    { id: 'hindu-vegetarian', label: 'Hindu Vegetarian' },
+    { id: 'hindu_vegetarian', label: 'Hindu Vegetarian' },
     { id: 'jain', label: 'Jain' },
   ];
 
@@ -81,6 +86,19 @@ export function DietPreferencesTab() {
       setTimeout(() => setSaved(false), 2000);
     }, 800);
   };
+
+  useEffect(()=>{
+    if(dietData){
+      setDietaryRestrictions(dietData.dietary_styles)
+      setCulturalRestrictions(dietData.cultural_restrictions)
+      setMealsPerDay(dietData.meals_per_day)
+      setMealTiming(dietData.meal_timing??'')
+      setCookingTime(dietData.preferred_cooking_time)
+      setBudget(dietData.weekly_food_budget)
+      setFavoriteFoods(dietData.foods_you_love??'')
+      setAvoidFoods(dietData.foods_to_avoid??'')
+    }
+  })
 
   return (
     <div>
@@ -146,10 +164,10 @@ export function DietPreferencesTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="3">3 Meals</SelectItem>
-                <SelectItem value="4">3 Meals + 1 Snack</SelectItem>
-                <SelectItem value="5">3 Meals + 2 Snacks</SelectItem>
-                <SelectItem value="6">5–6 Small Meals</SelectItem>
+                <SelectItem value="3_meals">3 Meals</SelectItem>
+                <SelectItem value="3_meals_1_snack">3 Meals + 1 Snack</SelectItem>
+                <SelectItem value="3_meals_2_snack">3 Meals + 2 Snacks</SelectItem>
+                <SelectItem value="5_6_small_meals">5–6 Small Meals</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -172,10 +190,10 @@ export function DietPreferencesTab() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="15-min">Under 15 minutes</SelectItem>
-                <SelectItem value="30-min">15–30 minutes</SelectItem>
-                <SelectItem value="45-min">30–45 minutes</SelectItem>
-                <SelectItem value="60-min">45–60 minutes</SelectItem>
+                <SelectItem value="15_min">Under 15 minutes</SelectItem>
+                <SelectItem value="15_30_min">15–30 minutes</SelectItem>
+                <SelectItem value="30_45_min">30–45 minutes</SelectItem>
+                <SelectItem value="45_60_min">45–60 minutes</SelectItem>
               </SelectContent>
             </Select>
           </div>
