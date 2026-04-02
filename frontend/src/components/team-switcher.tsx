@@ -16,7 +16,7 @@ export function TeamSwitcher({
     plan: string;
   }[];
 }) {
-  const [activeTeam, setActiveTeam] = React.useState(teams[0]);
+  const [activeTeam] = React.useState(teams[0]);
 
   if (!activeTeam) return null;
 
@@ -25,12 +25,20 @@ export function TeamSwitcher({
       <SidebarMenuItem>
         <SidebarMenuButton
           size="lg"
-          className="data-[state=open]:bg-sidebar-accent data-[state=open]:text-sidebar-accent-foreground"
+          className="hover:bg-transparent cursor-default"
         >
-          <div className="flex flex-1 items-center justify-center border-b pb-2">
-            <span className="font-sans text-xl font-semibold tracking-tight text-sidebar-foreground/90">
-              {activeTeam.name}
-            </span>
+          <div className="flex items-center gap-2 py-1">
+            <div className="flex h-7 w-7 items-center justify-center rounded bg-[#E50914] shrink-0">
+              <span className="text-white font-black text-sm leading-none">H</span>
+            </div>
+            <div className="flex flex-col">
+              <span className="font-bold text-sm tracking-tight text-foreground">
+                {activeTeam.name}
+              </span>
+              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-widest">
+                {activeTeam.plan}
+              </span>
+            </div>
           </div>
         </SidebarMenuButton>
       </SidebarMenuItem>

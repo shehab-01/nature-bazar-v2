@@ -150,9 +150,9 @@ const data = {
       icon: Dumbbell,
     },
     {
-      name: "Progerss",
+      name: "Progress",
       url: "/progress",
-      icon: ChartNoAxesCombined ,
+      icon: ChartNoAxesCombined,
     },
     {
       name: "Profile",

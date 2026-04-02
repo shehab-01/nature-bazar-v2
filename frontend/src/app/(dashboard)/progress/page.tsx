@@ -43,7 +43,7 @@ const Progress = () => {
   return (
     <div>
       <div className="flex-1 pb-20 lg:pb-0">
-        <div className="px-6 md:px-12 py-8 md:py-12 max-w-7xl mx-auto">
+        <div className="px-6 md:px-6 py-8 md:py-6 max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
             <h1

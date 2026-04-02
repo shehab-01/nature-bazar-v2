@@ -15,7 +15,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <main className="flex flex-1 flex-col  p-2 bg-[#eceff1]">
+      <main className="flex flex-1 flex-col p-3 bg-[#F5F5F1] min-h-screen">
         <SidebarTrigger />
         {children}
       </main>

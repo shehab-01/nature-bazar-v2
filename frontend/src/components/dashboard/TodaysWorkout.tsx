@@ -1,79 +1,60 @@
-import { Clock, Dumbbell } from "lucide-react";
+import { Clock, Dumbbell, Play } from "lucide-react";
+
+const exercises = [
+  "Bench Press — 3 sets × 10 reps",
+  "Dumbbell Rows — 3 sets × 12 reps",
+  "Shoulder Press — 3 sets × 10 reps",
+  "Bicep Curls — 3 sets × 12 reps",
+  "Tricep Extensions — 3 sets × 12 reps",
+];
 
 export function TodaysWorkout() {
-  const exercises = [
-    "Bench Press - 3 sets × 10 reps",
-    "Dumbbell Rows - 3 sets × 12 reps",
-    "Shoulder Press - 3 sets × 10 reps",
-    "Bicep Curls - 3 sets × 12 reps",
-    "Tricep Extensions - 3 sets × 12 reps",
-  ];
-
   return (
-    <div
-      className="bg-white rounded p-6 border"
-      style={{
-        borderColor: "rgba(113, 113, 122, 0.2)",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-        borderRadius: "8px",
-      }}
-    >
-      <div className="flex items-start justify-between mb-4">
-        <div>
-          <h3
-            className="text-xl mb-2"
-            style={{
-              fontFamily: "var(--font-serif)",
-              color: "var(--nutritrack-text)",
-            }}
-          >
+    <div className="bg-white rounded-lg border border-[#E5E5E0] shadow-sm overflow-hidden flex flex-col">
+      {/* Card header */}
+      <div className="px-6 pt-5 pb-4 border-b border-[#E5E5E0] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Dumbbell size={16} className="text-[#E50914]" />
+          <h3 className="font-bold text-base tracking-tight text-[#141414]">
             Today&apos;s Workout
           </h3>
-          <div
-            className="flex items-center gap-4 text-sm"
-            style={{ color: "var(--nutritrack-neutral)" }}
-          >
-            <div className="flex items-center gap-1.5">
-              <Dumbbell size={14} />
-              <span style={{ fontFamily: "var(--font-sans)" }}>Upper Body</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <Clock size={14} />
-              <span style={{ fontFamily: "var(--font-sans)" }}>45 min</span>
-            </div>
+        </div>
+        <div className="flex items-center gap-3 text-xs text-[#757575]">
+          <div className="flex items-center gap-1">
+            <Dumbbell size={12} />
+            <span className="font-medium">Upper Body</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Clock size={12} />
+            <span className="font-medium">45 min</span>
           </div>
         </div>
       </div>
 
-      <div className="space-y-2.5 mb-6">
+      {/* Exercise list */}
+      <div className="px-6 py-4 space-y-2 flex-1">
         {exercises.map((exercise, index) => (
           <div
             key={index}
-            className="flex items-start gap-2.5 text-sm"
-            style={{
-              fontFamily: "var(--font-sans)",
-              color: "var(--nutritrack-text)",
-            }}
+            className="flex items-center gap-3 py-1.5 group"
           >
-            <div
-              className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0"
-              style={{ backgroundColor: "var(--nutritrack-primary)" }}
-            />
-            {exercise}
+            <div className="w-5 h-5 rounded-full border-2 border-[#E5E5E0] flex items-center justify-center shrink-0 group-hover:border-[#E50914] transition-colors">
+              <span className="text-[10px] font-bold text-[#757575] group-hover:text-[#E50914] transition-colors">
+                {index + 1}
+              </span>
+            </div>
+            <span className="text-sm text-[#141414] font-medium">{exercise}</span>
           </div>
         ))}
       </div>
 
-      <button
-        className="w-full px-4 py-2.5 rounded transition-transform hover:scale-105 bg-(--nutritrack-primary)"
-        style={{
-          color: "white",
-          fontFamily: "var(--font-sans)",
-          borderRadius: "4px",
-        }}
-      >
-        Start Workout
-      </button>
+      {/* CTA button */}
+      <div className="px-6 pb-5 pt-2">
+        <button className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-md bg-[#E50914] text-white font-bold text-sm hover:bg-[#cc0812] active:scale-[0.98] transition-all duration-150 shadow-sm">
+          <Play size={14} fill="white" />
+          Start Workout
+        </button>
+      </div>
     </div>
   );
 }

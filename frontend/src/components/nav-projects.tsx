@@ -2,12 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { type LucideIcon } from "lucide-react";
-import {
-  SidebarGroup,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-} from "@/components/ui/sidebar";
+import { SidebarGroup, SidebarGroupLabel, SidebarMenu, SidebarMenuItem } from "@/components/ui/sidebar";
 import Link from "next/link";
 
 export function NavProjects({
@@ -22,22 +17,35 @@ export function NavProjects({
   const pathname = usePathname();
 
   return (
-    <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+    <SidebarGroup>
+      <SidebarGroupLabel className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground px-2 mb-1">
+        Navigation
+      </SidebarGroupLabel>
       <SidebarMenu>
-        {projects.map((item) => (
-          <SidebarMenuItem key={item.name}>
-            <SidebarMenuButton
-              asChild
-              isActive={pathname === item.url}
-              className="rounded-none transition-colors data-[active=true]:border-l-2 data-[active=true]:border-primary data-[active=true]:bg-primary/10 data-[active=true]:text-primary [&[data-active=true]_svg]:text-primary"
-            >
-              <Link href={item.url}>
-                <item.icon />
+        {projects.map((item) => {
+          const isActive = pathname === item.url;
+          return (
+            <SidebarMenuItem key={item.name}>
+              <Link
+                href={item.url}
+                className={`
+                  flex items-center gap-3 w-full px-3 py-2 rounded-md text-sm font-medium transition-all duration-150
+                  ${isActive
+                    ? "bg-[#E50914] text-white shadow-sm"
+                    : "text-[#444444] hover:bg-[#F0EFEB] hover:text-[#141414]"
+                  }
+                `}
+              >
+                <item.icon
+                  size={16}
+                  strokeWidth={isActive ? 2.5 : 2}
+                  className={isActive ? "text-white" : "text-[#757575]"}
+                />
                 <span>{item.name}</span>
               </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        ))}
+            </SidebarMenuItem>
+          );
+        })}
       </SidebarMenu>
     </SidebarGroup>
   );

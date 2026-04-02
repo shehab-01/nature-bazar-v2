@@ -1,89 +1,102 @@
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import { TrendingDown } from "lucide-react";
+
+const weightData = [
+  { week: "Week 1", weight: 75 },
+  { week: "Week 2", weight: 74.2 },
+  { week: "Week 3", weight: 73.5 },
+  { week: "Week 4", weight: 72.8 },
+];
+
+const stats = [
+  { label: "Current Weight", value: "72.8 kg", highlight: true },
+  { label: "Starting Weight", value: "75.0 kg", highlight: false },
+  { label: "Goal Weight", value: "68.0 kg", highlight: false },
+];
 
 export function ProgressSnapshot() {
-  const weightData = [
-    { week: 'Week 1', weight: 75, id: 'w1' },
-    { week: 'Week 2', weight: 74.2, id: 'w2' },
-    { week: 'Week 3', weight: 73.5, id: 'w3' },
-    { week: 'Week 4', weight: 72.8, id: 'w4' },
-  ];
-
-  const stats = [
-    { label: 'Current Weight', value: '72.8 kg', id: 'current' },
-    { label: 'Starting Weight', value: '75.0 kg', id: 'starting' },
-    { label: 'Goal Weight', value: '68.0 kg', id: 'goal' },
-  ];
-
   return (
-    <div 
-      className="bg-white rounded p-6 mb-6 border"
-      style={{ 
-        borderColor: 'rgba(113, 113, 122, 0.2)',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-        borderRadius: '8px'
-      }}
-    >
-      <h3 
-        className="text-xl mb-6"
-        style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
-      >
-        Progress Snapshot
-      </h3>
+    <div className="bg-white rounded-lg border border-[#E5E5E0] shadow-sm overflow-hidden">
+      {/* Header */}
+      <div className="px-6 pt-5 pb-4 border-b border-[#E5E5E0] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <TrendingDown size={16} className="text-[#E50914]" />
+          <h3 className="font-bold text-base tracking-tight text-[#141414]">
+            Progress Snapshot
+          </h3>
+        </div>
+        <span className="text-xs font-semibold text-[#36A94D] bg-[#36A94D]/10 px-2 py-0.5 rounded-full">
+          ↓ 2.2 kg lost
+        </span>
+      </div>
 
       {/* Chart */}
-      <div className="mb-6 h-64">
+      <div className="px-6 pt-5 h-56">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={weightData} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(113, 113, 122, 0.2)" vertical={false} />
-            <XAxis 
-              dataKey="week" 
-              tick={{ fill: '#71717A', fontFamily: 'var(--font-sans)', fontSize: 12 }}
-              axisLine={{ stroke: 'rgba(113, 113, 122, 0.2)' }}
+          <LineChart data={weightData} margin={{ top: 5, right: 10, left: -20, bottom: 5 }}>
+            <CartesianGrid
+              strokeDasharray="3 3"
+              stroke="#F0EFEB"
+              vertical={false}
             />
-            <YAxis 
+            <XAxis
+              dataKey="week"
+              tick={{ fill: "#757575", fontFamily: "var(--font-inter)", fontSize: 11, fontWeight: 500 }}
+              axisLine={false}
+              tickLine={false}
+            />
+            <YAxis
               domain={[70, 76]}
-              tick={{ fill: '#71717A', fontFamily: 'var(--font-sans)', fontSize: 12 }}
-              axisLine={{ stroke: 'rgba(113, 113, 122, 0.2)' }}
+              tick={{ fill: "#757575", fontFamily: "var(--font-inter)", fontSize: 11, fontWeight: 500 }}
+              axisLine={false}
+              tickLine={false}
             />
-            <Tooltip 
-              contentStyle={{ 
-                backgroundColor: 'white', 
-                border: '1px solid rgba(113, 113, 122, 0.2)',
-                borderRadius: '4px',
-                fontFamily: 'var(--font-sans)',
-                fontSize: '12px'
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "white",
+                border: "1px solid #E5E5E0",
+                borderRadius: "6px",
+                fontFamily: "var(--font-inter)",
+                fontSize: "12px",
+                fontWeight: 600,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
               }}
+              cursor={{ stroke: "#E50914", strokeWidth: 1, strokeDasharray: "4 4" }}
             />
-            <Line 
-              type="monotone" 
-              dataKey="weight" 
-              stroke="#C2410C" 
-              strokeWidth={2}
-              dot={{ fill: '#C2410C', r: 4 }}
-              activeDot={{ r: 6 }}
+            <Line
+              type="monotone"
+              dataKey="weight"
+              stroke="#E50914"
+              strokeWidth={2.5}
+              dot={{ fill: "#E50914", r: 4, strokeWidth: 0 }}
+              activeDot={{ r: 6, fill: "#E50914", strokeWidth: 2, stroke: "white" }}
             />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      {/* Stats row */}
+      <div className="grid grid-cols-3 gap-px bg-[#E5E5E0] border-t border-[#E5E5E0] mt-4">
         {stats.map((stat) => (
-          <div 
-            key={stat.id}
-            className="p-4 rounded text-center"
-            style={{ backgroundColor: 'rgba(113, 113, 122, 0.05)' }}
+          <div
+            key={stat.label}
+            className="bg-white px-4 py-4 text-center"
           >
-            <div 
-              className="text-2xl mb-1"
-              style={{ fontFamily: 'var(--font-serif)', color: 'var(--nutritrack-text)' }}
+            <div
+              className="font-black text-xl tracking-tight leading-none"
+              style={{ color: stat.highlight ? "#E50914" : "#141414" }}
             >
               {stat.value}
             </div>
-            <div 
-              className="text-xs"
-              style={{ fontFamily: 'var(--font-sans)', color: 'var(--nutritrack-neutral)' }}
-            >
+            <div className="text-xs text-[#757575] font-medium mt-1">
               {stat.label}
             </div>
           </div>
