@@ -1,47 +1,35 @@
 import { CheckCircle2 } from "lucide-react";
 
-export function DietRules() {
-  const rules = [
-    "Eat within an 8-hour window (intermittent fasting)",
-    "Avoid processed sugar and artificial sweeteners",
-    "Eat protein with every meal to stay full longer",
-    "Track your meals daily to stay accountable",
-    "Plan your meals ahead to avoid impulsive choices",
-  ];
+const RULES = [
+  "Eat every 3–4 hours to keep metabolism active",
+  "Prioritize protein at breakfast to stay full longer",
+  "Avoid eating after 9 PM",
+  "Drink a glass of water before each meal",
+  "Track your meals daily to stay accountable",
+  "Plan meals ahead to avoid impulsive choices",
+];
 
+export function DietRules() {
   return (
-    <div
-      className="bg-white rounded p-6 border"
-      style={{
-        borderColor: "rgba(113, 113, 122, 0.2)",
-        boxShadow: "0 1px 3px rgba(0, 0, 0, 0.05)",
-        borderRadius: "8px",
-      }}
-    >
+    <div className="bg-white shadow-sm p-6 flex flex-col" style={{ borderRadius: "12px" }}>
       <h3
-        className="text-xl mb-4"
-        style={{
-          fontFamily: "var(--font-serif)",
-          color: "var(--nutritrack-text)",
-        }}
+        className="text-lg font-semibold mb-5"
+        style={{ color: "#111827", fontFamily: "var(--font-inter)" }}
       >
         General Diet Rules
       </h3>
 
-      <div className="space-y-3">
-        {rules.map((rule, index) => (
-          <div key={index} className="flex items-start gap-3">
+      <div className="flex flex-col gap-3">
+        {RULES.map((rule) => (
+          <div key={rule} className="flex items-start gap-3">
             <CheckCircle2
-              size={20}
-              className="flex-shrink-0 mt-0.5"
-              style={{ color: "var(--nutritrack-primary)" }}
+              size={18}
+              className="mt-0.5 shrink-0"
+              style={{ color: "#1D9E75" }}
             />
             <p
               className="text-sm leading-relaxed"
-              style={{
-                fontFamily: "var(--font-sans)",
-                color: "var(--nutritrack-text)",
-              }}
+              style={{ color: "#374151", fontFamily: "var(--font-inter)" }}
             >
               {rule}
             </p>
