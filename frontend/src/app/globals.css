@@ -7,7 +7,6 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -49,92 +48,73 @@
   --font-display: var(--font-inter), sans-serif;
 }
 
-/* Netflix Light Mode */
 :root {
-  --background: #F5F5F1;
-  --foreground: #141414;
-  --card: #FFFFFF;
-  --card-foreground: #141414;
-  --popover: #FFFFFF;
-  --popover-foreground: #141414;
-  --primary: #E50914;
-  --primary-foreground: #FFFFFF;
-  --secondary: #F0EFEB;
-  --secondary-foreground: #141414;
-  --muted: #F0EFEB;
-  --muted-foreground: #757575;
-  --accent: #F0EFEB;
-  --accent-foreground: #141414;
-  --destructive: #E50914;
-  --border: #E5E5E0;
-  --input: #E5E5E0;
-  --ring: #E50914;
-  --radius: 0.5rem;
-
-  /* Chart colors */
-  --chart-1: #E50914;
-  --chart-2: #F5831A;
-  --chart-3: #F7C948;
-  --chart-4: #36A94D;
-  --chart-5: #1D70E0;
-
-  /* Sidebar */
-  --sidebar: #FFFFFF;
-  --sidebar-foreground: #141414;
-  --sidebar-primary: #E50914;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F5F5F1;
-  --sidebar-accent-foreground: #141414;
-  --sidebar-border: #E5E5E0;
-  --sidebar-ring: #E50914;
-
-  /* Resolve legacy --font-serif references → Inter */
-  --font-serif: var(--font-inter), sans-serif;
-
-  /* Netflix brand tokens */
-  --nf-red: #E50914;
-  --nf-dark: #141414;
-  --nf-bg: #F5F5F1;
-  --nf-surface: #FFFFFF;
-  --nf-muted: #757575;
-  --nf-border: #E5E5E0;
-  --nf-highlight: #FFF0F0;
-
-  /* Legacy tokens (keep for backward compat) */
-  --nutritrack-bg: #F5F5F1;
-  --nutritrack-primary: #E50914;
-  --nutritrack-neutral: #757575;
-  --nutritrack-text: #141414;
-  --nutritrack-highlight: #FFF0F0;
+  --radius: 0.625rem;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.205 0 0);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.97 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
 }
 
 .dark {
-  --background: #141414;
-  --foreground: #F5F5F1;
-  --card: #1F1F1F;
-  --card-foreground: #F5F5F1;
-  --popover: #1F1F1F;
-  --popover-foreground: #F5F5F1;
-  --primary: #E50914;
-  --primary-foreground: #FFFFFF;
-  --secondary: #2A2A2A;
-  --secondary-foreground: #F5F5F1;
-  --muted: #2A2A2A;
-  --muted-foreground: #A0A0A0;
-  --accent: #2A2A2A;
-  --accent-foreground: #F5F5F1;
-  --destructive: #E50914;
-  --border: rgba(255,255,255,0.1);
-  --input: rgba(255,255,255,0.15);
-  --ring: #E50914;
-  --sidebar: #1A1A1A;
-  --sidebar-foreground: #F5F5F1;
-  --sidebar-primary: #E50914;
-  --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #2A2A2A;
-  --sidebar-accent-foreground: #F5F5F1;
-  --sidebar-border: rgba(255,255,255,0.1);
-  --sidebar-ring: #E50914;
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }
 
 @layer base {
@@ -143,32 +123,8 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-feature-settings: "cv11", "ss01";
   }
   html {
     @apply font-sans;
-  }
-}
-
-/* Netflix-style utility classes */
-@layer utilities {
-  .nf-heading {
-    font-family: var(--font-sans);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    color: var(--nf-dark);
-  }
-  .nf-card {
-    background: var(--nf-surface);
-    border: 1px solid var(--nf-border);
-    border-radius: 6px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-  }
-  .nf-card-hover {
-    transition: box-shadow 0.2s ease, transform 0.2s ease;
-  }
-  .nf-card-hover:hover {
-    box-shadow: 0 8px 24px rgba(0,0,0,0.1);
-    transform: translateY(-1px);
   }
 }

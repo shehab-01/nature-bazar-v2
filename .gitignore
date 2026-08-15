@@ -23,7 +23,12 @@ npm-debug.log*
 # -----------------
 # IDE
 # -----------------
-.vscode/
+# Ignore .vscode/* but keep the shared debug/launch config in the repo.
+# (Must be `.vscode/*`, not `.vscode/` — git cannot re-include files
+#  inside a fully ignored directory.)
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
 .idea/
 
 # -----------------
