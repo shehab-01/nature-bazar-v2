@@ -1,9 +1,11 @@
 import type { NextConfig } from "next";
 
+const API_URL = process.env.API_URL ?? "http://api:8000";
+
 const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
-    return [{ source: "/api/:path*", destination: "http://api:8000/:path*" }];
+    return [{ source: "/api/:path*", destination: `${API_URL}/api/:path*` }];
   },
 };
 

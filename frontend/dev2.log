@@ -1,0 +1,43 @@
+▲ Next.js 16.1.6 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://172.30.1.200:3000
+
+✓ Starting...
+✓ Ready in 407ms
+ GET / 200 in 390ms (compile: 309ms, render: 82ms)
+ GET / 200 in 23ms (compile: 2ms, render: 21ms)
+ GET / 200 in 21ms (compile: 1471µs, render: 19ms)
+ GET /admin/login 200 in 265ms (compile: 231ms, render: 34ms)
+(node:3942706) [DEP0060] DeprecationWarning: The `util._extend` API is deprecated. Please use Object.assign() instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+Failed to proxy http://api:8000/api/auth/me Error: getaddrinfo EAI_AGAIN api
+    at ignore-listed frames {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'api'
+}
+Error: getaddrinfo EAI_AGAIN api
+    at ignore-listed frames {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'api'
+}
+ GET / 200 in 111ms (compile: 49ms, render: 62ms)
+ GET /admin/login 200 in 92ms (compile: 39ms, render: 53ms)
+Failed to proxy http://api:8000/api/auth/me Error: getaddrinfo EAI_AGAIN api
+    at ignore-listed frames {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'api'
+}
+Error: getaddrinfo EAI_AGAIN api
+    at ignore-listed frames {
+  errno: -3001,
+  code: 'EAI_AGAIN',
+  syscall: 'getaddrinfo',
+  hostname: 'api'
+}
+[?25h

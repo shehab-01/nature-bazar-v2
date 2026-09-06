@@ -23,6 +23,7 @@ body {
 img {
   display: block;
   max-width: 100%;
+  height: auto;
 }
 a {
   color: inherit;
@@ -276,6 +277,19 @@ a {
 .order-section textarea:focus {
   border-color: #6c9e44;
   box-shadow: 0 0 0 3px #b8d88344;
+}
+.form-error {
+  margin: 0 0 12px;
+  padding: 11px 14px;
+  border: 1px solid #e5b5b5;
+  border-radius: 4px;
+  background: #fdf0f0;
+  color: #a13030;
+  font-size: 13px;
+}
+.order-section button:disabled {
+  opacity: 0.7;
+  cursor: wait;
 }
 .order-section button {
   width: 100%;

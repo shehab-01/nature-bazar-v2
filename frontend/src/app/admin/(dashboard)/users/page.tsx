@@ -1,0 +1,122 @@
+"use client";
+
+import * as React from "react";
+
+import { useAuth } from "@/components/admin/auth-context";
+import { DataTable } from "@/components/admin/data-table/data-table";
+import { getTeamColumns } from "@/components/admin/users/columns";
+import { PendingRequests } from "@/components/admin/users/pending-requests";
+import { deleteUser, listUsers, updateUser } from "@/lib/api";
+import type { TeamMember, UserStatus } from "@/lib/team";
+
+export default function UsersPage() {
+  const { user: currentUser } = useAuth();
+  const [users, setUsers] = React.useState<TeamMember[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const refresh = React.useCallback(async () => {
+    try {
+      setUsers(await listUsers());
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load users");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  const handleApprove = React.useCallback(
+    async (id: number) => {
+      try {
+        await updateUser(id, { status: "active" });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to approve");
+      }
+    },
+    [refresh]
+  );
+
+  const handleDeny = React.useCallback(
+    async (id: number) => {
+      try {
+        await deleteUser(id);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to deny");
+      }
+    },
+    [refresh]
+  );
+
+  const handleStatusChange = React.useCallback(
+    async (id: number, status: UserStatus) => {
+      try {
+        await updateUser(id, { status });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update user");
+      }
+    },
+    [refresh]
+  );
+
+  const columns = React.useMemo(
+    () =>
+      getTeamColumns({
+        currentUserId: currentUser.id,
+        onStatusChange: handleStatusChange,
+      }),
+    [currentUser.id, handleStatusChange]
+  );
+
+  const pending = users.filter((u) => u.status === "pending");
+  const team = users.filter((u) => u.status !== "pending");
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div>
+        <h2 className="text-xl font-semibold text-foreground">
+          Users &amp; access
+        </h2>
+        <p className="text-sm text-muted-foreground">
+          Approve sign-in requests and keep track of what each staff member
+          has done.
+        </p>
+      </div>
+
+      {error && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-muted-foreground">Loading users…</p>
+      ) : (
+        <>
+          <PendingRequests
+            requests={pending}
+            onApprove={handleApprove}
+            onDeny={handleDeny}
+          />
+
+          <div className="flex flex-col gap-2">
+            <h3 className="text-lg font-semibold text-foreground">Team</h3>
+            <DataTable
+              columns={columns}
+              data={team}
+              searchColumnId="name"
+              searchPlaceholder="Search by name or email..."
+            />
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
