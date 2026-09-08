@@ -30,6 +30,19 @@ services:
       META_PIXEL_ID: ${META_PIXEL_ID:-}
       META_CAPI_ACCESS_TOKEN: ${META_CAPI_ACCESS_TOKEN:-}
       META_TEST_EVENT_CODE: ${META_TEST_EVENT_CODE:-}
+      PATHAO_BASE_URL: ${PATHAO_BASE_URL:-https://courier-api-sandbox.pathao.com}
+      PATHAO_CLIENT_ID: ${PATHAO_CLIENT_ID:-}
+      PATHAO_CLIENT_SECRET: ${PATHAO_CLIENT_SECRET:-}
+      PATHAO_USERNAME: ${PATHAO_USERNAME:-}
+      PATHAO_PASSWORD: ${PATHAO_PASSWORD:-}
+      PATHAO_STORE_ID: ${PATHAO_STORE_ID:-0}
+      PATHAO_UNIT_WEIGHT_KG: ${PATHAO_UNIT_WEIGHT_KG:-1}
+      MEDIA_ROOT: /app/media
+    volumes:
+      # Uploaded product images. A named volume, not a bind or a path inside
+      # the image: anything written into the container itself is lost the next
+      # time the api image is rebuilt.
+      - media:/app/media
     depends_on:
       db:
         condition: service_healthy
@@ -51,3 +64,4 @@ services:
 
 volumes:
   postgres-data:
+  media:

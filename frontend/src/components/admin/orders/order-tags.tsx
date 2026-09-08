@@ -12,7 +12,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { addOrderTag } from "@/lib/api";
-import type { Order } from "@/lib/orders";
+import { shortName, staffLabel, type Order } from "@/lib/orders";
 import { cn } from "@/lib/utils";
 
 const TAG_COLORS = [
@@ -26,12 +26,63 @@ const TAG_COLORS = [
   "bg-teal-100 text-teal-700 dark:bg-teal-950 dark:text-teal-300",
 ];
 
-function initial(name: string | null): string {
-  return (name ?? "?").trim().slice(0, 1).toUpperCase();
+/**
+ * Whether a tag is just its author signing their own name — the "I called
+ * this one" tag. Old tags were written before nicknames existed, so a plain
+ * short name counts as the author too; that way renaming someone updates
+ * every tag they ever left.
+ */
+function isSelfTag(
+  label: string,
+  fullName: string | null,
+  nickname: string | null
+): boolean {
+  const aliases = [staffLabel(fullName, nickname), fullName ? shortName(fullName) : ""]
+    .filter(Boolean)
+    .map((alias) => alias.toLowerCase());
+  return aliases.includes(label.trim().toLowerCase());
 }
 
-function firstName(name: string): string {
-  return name.trim().split(/\s+/)[0];
+type TagGroup = {
+  key: string;
+  label: string;
+  createdByName: string | null;
+  createdByNickname: string | null;
+  colorId: number;
+  ids: number[];
+};
+
+function TagPill({ group }: { group: TagGroup }) {
+  const author = staffLabel(group.createdByName, group.createdByNickname);
+  const signature = isSelfTag(
+    group.label,
+    group.createdByName,
+    group.createdByNickname
+  );
+
+  return (
+    <span
+      title={author ? `Tagged by ${author}` : "Tagged by an unknown user"}
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-xs font-medium",
+        TAG_COLORS[group.colorId % TAG_COLORS.length]
+      )}
+    >
+      {/* A signature tag shows the author's current name on its own; any
+          other tag keeps its text and names the author beside it. */}
+      {!signature && author && (
+        <span className="rounded-full bg-white/70 px-1 text-[10px] font-semibold dark:bg-black/30">
+          {author}
+        </span>
+      )}
+      {signature ? author : group.label}
+      {group.ids.length > 1 && (
+        <span className="rounded-full bg-white/70 px-1 text-[10px] font-bold dark:bg-black/30">
+          {group.ids.length}
+        </span>
+      )}
+    </span>
+  );
 }
 
 export function OrderTags({
@@ -58,19 +109,15 @@ export function OrderTags({
     }
   };
 
-  const myName = firstName(user.name);
+  // The one-click tag is the staff member's own name — their nickname when a super
+  // admin set one, so tags read "Jahir" rather than "Md" for half the team.
+  const myName = staffLabel(user.name, user.nickname);
   const myNameCount = order.tags.filter(
     (tag) => tag.label.toLowerCase() === myName.toLowerCase()
   ).length;
 
   // Same-label tags collapse into one pill with a count.
-  const groups: {
-    key: string;
-    label: string;
-    createdByName: string | null;
-    colorId: number;
-    ids: number[];
-  }[] = [];
+  const groups: TagGroup[] = [];
   for (const tag of order.tags) {
     const key = tag.label.toLowerCase();
     const group = groups.find((g) => g.key === key);
@@ -81,6 +128,7 @@ export function OrderTags({
         key,
         label: tag.label,
         createdByName: tag.createdByName,
+        createdByNickname: tag.createdByNickname,
         colorId: tag.id,
         ids: [tag.id],
       });
@@ -90,26 +138,7 @@ export function OrderTags({
   return (
     <div className="flex max-w-[260px] flex-wrap items-center gap-1">
       {groups.map((group) => (
-        <span
-          key={group.key}
-          className={cn(
-            "inline-flex items-center gap-1 rounded-full py-0.5 pr-1.5 pl-0.5 text-xs font-medium",
-            TAG_COLORS[group.colorId % TAG_COLORS.length]
-          )}
-        >
-          <span
-            title={group.createdByName ?? "Unknown"}
-            className="flex size-4 items-center justify-center rounded-full bg-white/70 text-[10px] font-bold dark:bg-black/30"
-          >
-            {initial(group.createdByName)}
-          </span>
-          {group.label}
-          {group.ids.length > 1 && (
-            <span className="rounded-full bg-white/70 px-1 text-[10px] font-bold dark:bg-black/30">
-              {group.ids.length}
-            </span>
-          )}
-        </span>
+        <TagPill key={group.key} group={group} />
       ))}
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>

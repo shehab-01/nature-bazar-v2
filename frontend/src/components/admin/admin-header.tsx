@@ -1,0 +1,80 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { HEADER_LINKS, pageTitle, type HeaderLink } from "@/lib/admin-nav";
+import { cn } from "@/lib/utils";
+
+const ITEM_CLASS =
+  "flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium whitespace-nowrap transition-colors";
+
+function HeaderItem({
+  link,
+  active,
+}: {
+  link: HeaderLink;
+  active: boolean;
+}) {
+  const content = (
+    <>
+      <link.icon className="size-4 shrink-0" />
+      {link.title}
+    </>
+  );
+
+  // Links without a destination are placeholders for screens not built yet.
+  // They keep the menu's shape without pretending to go somewhere.
+  if (!link.href) {
+    return (
+      <button
+        type="button"
+        aria-disabled
+        title={`${link.title} — coming soon`}
+        className={cn(ITEM_CLASS, "text-muted-foreground hover:bg-table-header")}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <Link
+      href={link.href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        ITEM_CLASS,
+        active
+          ? "bg-sidebar-accent text-sidebar-accent-foreground"
+          : "text-muted-foreground hover:bg-table-header hover:text-foreground"
+      )}
+    >
+      {content}
+    </Link>
+  );
+}
+
+export function AdminHeader() {
+  const pathname = usePathname();
+
+  return (
+    <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="mr-1 h-4" />
+      <h1 className="shrink-0 text-sm font-semibold text-foreground">
+        {pageTitle(pathname)}
+      </h1>
+      <nav className="ml-auto flex items-center gap-1 overflow-x-auto">
+        {HEADER_LINKS.map((link) => (
+          <HeaderItem
+            key={link.title}
+            link={link}
+            active={link.href === pathname}
+          />
+        ))}
+      </nav>
+    </header>
+  );
+}

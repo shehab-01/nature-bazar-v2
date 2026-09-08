@@ -1,0 +1,262 @@
+import os
+import platform
+import shutil
+import time
+from datetime import datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, Request
+from sqlalchemy import func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api import monitoring
+from api.auth import require_super_admin
+from api.config import settings
+from api.db import engine, get_session
+from api.models import Order, OrderEvent, TrafficMinute, User, UserStatus
+from api.ratelimit import client_ip, drafts_limiter, logins_limiter, orders_limiter
+from api.schemas import PathaoStatusOut
+from api.services import meta_capi, pathao
+
+router = APIRouter(
+    prefix="/system",
+    tags=["System"],
+    dependencies=[Depends(require_super_admin)],
+)
+
+# Headers that say where a request came from and what it passed through.
+FORWARDING_HEADERS = (
+    "cf-connecting-ip",
+    "cf-ray",
+    "cf-ipcountry",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-forwarded-proto",
+    "x-real-ip",
+    "user-agent",
+)
+
+TRAFFIC_COLUMNS = (
+    "requests",
+    "throttled",
+    "cooldown",
+    "client_errors",
+    "server_errors",
+    "latency_ms",
+)
+
+
+@router.get("/request-info")
+async def request_info(request: Request) -> dict:
+    """
+    What the API sees of the caller's own request: the socket address, the
+    address the rate limiter would key on, and the forwarding headers that
+    survived the proxies in between. For checking that Cloudflare's client
+    address really reaches this container — if it doesn't, per-IP limiting
+    is silently off.
+    """
+    return {
+        "socket_client": request.client.host if request.client else None,
+        "resolved_client_ip": client_ip(request),
+        "headers": {
+            name: request.headers.get(name) for name in FORWARDING_HEADERS
+        },
+    }
+
+
+def _meminfo() -> dict[str, int]:
+    """MemTotal / MemAvailable in bytes. /proc is the host kernel's, so this
+    is the whole machine, not just this container."""
+    wanted = {"MemTotal", "MemAvailable"}
+    out: dict[str, int] = {}
+    try:
+        with open("/proc/meminfo") as fh:
+            for line in fh:
+                key, _, rest = line.partition(":")
+                if key in wanted:
+                    out[key] = int(rest.split()[0]) * 1024
+    except OSError:
+        pass
+    return out
+
+
+def _totals(row) -> dict:
+    values = {col: int(getattr(row, col) or 0) for col in TRAFFIC_COLUMNS}
+    values["avg_latency_ms"] = (
+        round(values["latency_ms"] / values["requests"], 1) if values["requests"] else 0
+    )
+    return values
+
+
+@router.get("/overview")
+async def overview(
+    request: Request, session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Everything the System page shows, in one round trip."""
+    now = datetime.now(timezone.utc)
+
+    # -- database ------------------------------------------------------------
+    started = time.perf_counter()
+    await session.execute(text("SELECT 1"))
+    db_latency_ms = round((time.perf_counter() - started) * 1000, 2)
+    db_size = await session.scalar(text("SELECT pg_database_size(current_database())"))
+    pg_version = await session.scalar(text("SHOW server_version"))
+    pool = engine.pool
+
+    # -- traffic: last 60 minutes per minute, summed across workers ---------
+    sums = [func.sum(getattr(TrafficMinute, col)).label(col) for col in TRAFFIC_COLUMNS]
+    window_start = now.replace(second=0, microsecond=0) - timedelta(minutes=59)
+    rows = await session.execute(
+        select(TrafficMinute.minute, *sums)
+        .where(TrafficMinute.minute >= window_start)
+        .group_by(TrafficMinute.minute)
+    )
+    by_minute = {row.minute: row for row in rows}
+    per_minute = []
+    for i in range(60):
+        minute = window_start + timedelta(minutes=i)
+        row = by_minute.get(minute)
+        point = {"minute": minute.isoformat()}
+        point.update(
+            {col: int(getattr(row, col) or 0) if row else 0 for col in TRAFFIC_COLUMNS}
+        )
+        per_minute.append(point)
+
+    class _Sum:
+        pass
+
+    hour = _Sum()
+    for col in TRAFFIC_COLUMNS:
+        setattr(hour, col, sum(p[col] for p in per_minute))
+    day = (
+        await session.execute(
+            select(*sums).where(TrafficMinute.minute >= now - timedelta(hours=24))
+        )
+    ).one()
+
+    # -- orders, from the audit trail so promoted drafts count once --------
+    async def events(kinds: tuple[str, ...], since: datetime, new_status: str | None = None) -> int:
+        conditions = [OrderEvent.event_type.in_(kinds), OrderEvent.created_at >= since]
+        if new_status:
+            conditions.append(OrderEvent.new_status == new_status)
+        return int(await session.scalar(select(func.count()).select_from(OrderEvent).where(*conditions)) or 0)
+
+    flow = {}
+    for name, since in (("last_hour", now - timedelta(hours=1)), ("last_24h", now - timedelta(hours=24))):
+        flow[name] = {
+            "orders_placed": await events(("created", "draft_submitted"), since),
+            "forms_captured": await events(("draft_captured",), since),
+            "confirmed": await events(("status_changed",), since, "confirmed"),
+            "cancelled": await events(("status_changed",), since, "cancelled"),
+        }
+    by_status = {
+        status: int(count)
+        for status, count in await session.execute(
+            select(Order.status, func.count()).group_by(Order.status)
+        )
+    }
+    pending_signins = int(
+        await session.scalar(
+            select(func.count()).select_from(User).where(User.status == UserStatus.pending)
+        )
+        or 0
+    )
+
+    # -- this request: is the client address visible to the limiter? --------
+    ip = client_ip(request)
+
+    # -- host ---------------------------------------------------------------
+    load1, load5, load15 = os.getloadavg()
+    mem = _meminfo()
+    disk = shutil.disk_usage("/")
+
+    return {
+        "generated_at": now.isoformat(),
+        "database": {
+            "ok": True,
+            "latency_ms": db_latency_ms,
+            "size_bytes": int(db_size or 0),
+            "version": pg_version,
+            "pool": {
+                "size": pool.size(),
+                "in_use": pool.checkedout(),
+                "overflow": max(0, pool.overflow()),
+                "max_overflow": settings.db_max_overflow,
+            },
+        },
+        "traffic": {
+            "per_minute": per_minute,
+            "last_hour": _totals(hour),
+            "last_24h": _totals(day),
+            "flush_every_seconds": monitoring.FLUSH_EVERY_SECONDS,
+        },
+        "orders": {
+            "flow": flow,
+            "by_status": by_status,
+            "total": sum(by_status.values()),
+            "pending_signins": pending_signins,
+        },
+        "rate_limits": {
+            "limiters": [
+                limiter.snapshot()
+                for limiter in (orders_limiter, drafts_limiter, logins_limiter)
+            ],
+            "order_cooldown_hours": settings.order_cooldown_hours,
+            "client_ip_header": settings.client_ip_header,
+        },
+        "request": {
+            "client_ip": ip,
+            "client_ip_visible": ip is not None,
+            "via_cloudflare": bool(request.headers.get("cf-ray")),
+            "country": request.headers.get("cf-ipcountry"),
+        },
+        "server": {
+            "load": [round(load1, 2), round(load5, 2), round(load15, 2)],
+            "cpus": os.cpu_count() or 1,
+            "memory_total": mem.get("MemTotal"),
+            "memory_available": mem.get("MemAvailable"),
+            "disk_total": disk.total,
+            "disk_free": disk.free,
+        },
+        "process": {
+            "worker": monitoring.WORKER_ID,
+            "started_at": monitoring.STARTED_AT.isoformat(),
+            "uptime_seconds": int((now - monitoring.STARTED_AT).total_seconds()),
+            "workers_configured": int(os.getenv("UVICORN_WORKERS", "2")),
+            "python": platform.python_version(),
+        },
+        "integrations": {
+            # The browser pixel needs only the ID; server-side CAPI needs the
+            # access token as well. Reported apart so "no token yet" doesn't
+            # read as "pixel off".
+            "meta_pixel": bool(settings.meta_pixel_id),
+            "meta_capi": meta_capi.enabled(),
+            "meta_test_mode": bool(settings.meta_test_event_code),
+            "google_login": bool(settings.google_client_id),
+            "secure_cookies": settings.cookie_secure,
+        },
+        "recent_logs": list(monitoring.recent_logs.records)[::-1][:100],
+    }
+
+
+@router.get("/pathao", response_model=PathaoStatusOut)
+async def pathao_status() -> PathaoStatusOut:
+    """
+    Is Pathao configured, which environment, and which stores the credentials
+    can see — the check to run once after putting keys in .env, so the store
+    id can be copied from here rather than guessed.
+    """
+    out = PathaoStatusOut(
+        enabled=pathao.enabled(),
+        sandbox=pathao.is_sandbox(),
+        base_url=settings.pathao_base_url,
+        store_id=settings.pathao_store_id,
+        unit_weight_kg=settings.pathao_unit_weight_kg,
+    )
+    if not out.enabled:
+        out.error = "Missing PATHAO_* settings"
+        return out
+    try:
+        out.stores = await pathao.list_stores()
+    except pathao.PathaoError as exc:
+        out.error = pathao.error_text(exc)
+    return out

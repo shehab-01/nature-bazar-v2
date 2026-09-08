@@ -27,7 +27,10 @@ class Settings:
         if origin.strip()
     ]
 
-    # Price is decided server-side; client-sent totals are never trusted.
+    # The fallback product, used only if the products table is empty — every
+    # order normally prices against the active row (see api.routers.products).
+    # Price is decided server-side either way; client-sent totals are never
+    # trusted.
     product_name: str = os.getenv(
         "PRODUCT_NAME",
         "স্পেশাল আচার কম্বো (ইলিশ, গরুর মাংস, চেপা শুটকি)",
@@ -37,12 +40,58 @@ class Settings:
     # server events describe the same catalogue item.
     product_sku: str = os.getenv("PRODUCT_SKU", "combo-1490")
 
+    # Where uploaded product images are written. This must be a mounted volume:
+    # anything written elsewhere in the container is lost on the next rebuild.
+    media_root: str = os.getenv("MEDIA_ROOT", "/app/media")
+    # Refused above this, before anything touches disk.
+    max_upload_bytes: int = int(os.getenv("MAX_UPLOAD_BYTES", str(5 * 1024 * 1024)))
+
+    # A claim (staff has the order open) older than this is a crashed tab, not
+    # a person: anyone may take the row over. The modal heartbeats well inside
+    # this window while it is open.
+    claim_ttl_minutes: int = int(os.getenv("CLAIM_TTL_MINUTES", "10"))
+
+    # One order per phone number per this many hours. Stops double-taps and
+    # repeat spam without any state beyond the orders table itself.
+    order_cooldown_hours: int = int(os.getenv("ORDER_COOLDOWN_HOURS", "24"))
+
+    # Per-IP limits on the public endpoints, per window; 0 disables one.
+    # Generous on purpose: mobile carriers here put thousands of customers
+    # behind one CGNAT address, and a campaign spike must not become 429s.
+    rate_limit_window_seconds: int = int(os.getenv("RATE_LIMIT_WINDOW_SECONDS", "600"))
+    rate_limit_orders: int = int(os.getenv("RATE_LIMIT_ORDERS", "30"))
+    rate_limit_drafts: int = int(os.getenv("RATE_LIMIT_DRAFTS", "300"))
+    rate_limit_logins: int = int(os.getenv("RATE_LIMIT_LOGINS", "20"))
+    # Header carrying the real client address. Cloudflare sets this one and
+    # overwrites whatever the client sent. Empty = trust the socket address.
+    client_ip_header: str = os.getenv("CLIENT_IP_HEADER", "cf-connecting-ip")
+
     # Meta Conversions API (server-side Purchase events). Disabled when either
     # value is empty. META_TEST_EVENT_CODE routes events to the Test Events tab.
     meta_pixel_id: str = os.getenv("META_PIXEL_ID", "")
     meta_capi_access_token: str = os.getenv("META_CAPI_ACCESS_TOKEN", "")
     meta_test_event_code: str = os.getenv("META_TEST_EVENT_CODE", "")
     meta_api_version: str = os.getenv("META_API_VERSION", "v21.0")
+
+    # Pathao Courier merchant API. Disabled until client id, secret, username,
+    # password and store id are all set. Defaults point at the sandbox so a
+    # half-configured server can never create real consignments.
+    pathao_base_url: str = os.getenv(
+        "PATHAO_BASE_URL", "https://courier-api-sandbox.pathao.com"
+    ).rstrip("/")
+    pathao_client_id: str = os.getenv("PATHAO_CLIENT_ID", "")
+    pathao_client_secret: str = os.getenv("PATHAO_CLIENT_SECRET", "")
+    pathao_username: str = os.getenv("PATHAO_USERNAME", "")
+    pathao_password: str = os.getenv("PATHAO_PASSWORD", "")
+    pathao_store_id: int = int(os.getenv("PATHAO_STORE_ID", "0") or 0)
+    # Weight of one unit in kg; multiplied by quantity and clamped to Pathao's
+    # 0.5 to 10 kg range. Pathao prices by weight, so keep this honest.
+    pathao_unit_weight_kg: float = float(os.getenv("PATHAO_UNIT_WEIGHT_KG", "1"))
+    # Public tracking page Pathao gives customers; the consignment id and
+    # phone are appended as query parameters.
+    pathao_tracking_url: str = os.getenv(
+        "PATHAO_TRACKING_URL", "https://merchant.pathao.com/tracking"
+    )
 
     # Auth
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")

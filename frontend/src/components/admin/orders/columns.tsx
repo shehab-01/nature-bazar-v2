@@ -1,19 +1,65 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, ExternalLink } from "lucide-react";
+import { Check, ExternalLink, Lock } from "lucide-react";
 
+import { SortableHeader } from "@/components/admin/data-table/data-table-sort-header";
 import { OrderTags } from "@/components/admin/orders/order-tags";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { formatOrderDateTime, timeAgo, type Order } from "@/lib/orders";
+import {
+  ORDER_SOURCE_LABELS,
+  SOURCE_BADGE_CLASS,
+  activeClaim,
+  formatOrderDateTime,
+  timeAgo,
+  staffLabel,
+  type Order,
+} from "@/lib/orders";
+import { cn } from "@/lib/utils";
+
+/** A tick when the flag is set, blank when it isn't. */
+function FlagCell({ on }: { on: boolean }) {
+  return on ? (
+    <Check className="size-4 text-emerald-600 dark:text-emerald-400" />
+  ) : (
+    <span className="sr-only">No</span>
+  );
+}
+
+/** The consignment id as a link to Pathao's tracking page, plus its status. */
+function PathaoCell({ order }: { order: Order }) {
+  if (!order.pathaoConsignmentId) {
+    return <span className="sr-only">Not sent</span>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      <a
+        href={order.pathaoTrackingUrl ?? "#"}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 font-mono text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+        onClick={(event) => event.stopPropagation()}
+      >
+        {order.pathaoConsignmentId}
+        <ExternalLink className="size-3" />
+      </a>
+      {order.pathaoStatus && (
+        <span className="text-xs text-muted-foreground">{order.pathaoStatus}</span>
+      )}
+    </div>
+  );
+}
 
 export function getOrderColumns({
   onOpen,
   onOrderUpdated,
+  currentUserId,
 }: {
   onOpen: (order: Order) => void;
   onOrderUpdated: (order: Order) => void;
+  currentUserId: number;
 }): ColumnDef<Order>[] {
   return [
     {
@@ -40,16 +86,12 @@ export function getOrderColumns({
     },
     {
       accessorKey: "createdAt",
+      meta: { label: "Created At" },
       header: ({ column }) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-3"
+        <SortableHeader
+          label="Created At"
           onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Created At
-          <ArrowUpDown className="ml-1 size-3.5" />
-        </Button>
+        />
       ),
       cell: ({ row }) => (
         <div className="flex flex-col">
@@ -65,6 +107,7 @@ export function getOrderColumns({
     },
     {
       id: "landTime",
+      meta: { label: "Land Time" },
       header: "Land Time",
       enableSorting: false,
       cell: ({ row }) => (
@@ -75,19 +118,33 @@ export function getOrderColumns({
     },
     {
       accessorKey: "customerName",
+      meta: { label: "Customer" },
       header: "Customer",
       cell: ({ row }) => (
-        <div className="flex flex-col">
-          <span className="font-medium">{row.original.customerName}</span>
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium">
+            {row.original.customerName || (
+              <span className="text-muted-foreground">No name given</span>
+            )}
+          </span>
           <span className="text-xs text-muted-foreground">
             {row.original.phone}
           </span>
+          {row.original.autoCaptured && (
+            <Badge
+              variant="outline"
+              className="mt-0.5 w-fit border-amber-500/40 bg-amber-50 text-[10px] font-medium text-amber-700 dark:bg-amber-950/50 dark:text-amber-300"
+            >
+              Abandoned form
+            </Badge>
+          )}
         </div>
       ),
       filterFn: () => true,
     },
     {
       id: "note",
+      meta: { label: "Note" },
       header: "Note",
       enableSorting: false,
       cell: ({ row }) => (
@@ -103,6 +160,7 @@ export function getOrderColumns({
     },
     {
       accessorKey: "address",
+      meta: { label: "Address" },
       header: "Address",
       cell: ({ row }) => (
         <span className="line-clamp-2 max-w-[220px] text-sm text-muted-foreground">
@@ -112,11 +170,65 @@ export function getOrderColumns({
     },
     {
       id: "tags",
+      meta: { label: "Tags" },
       header: "Tags",
       enableSorting: false,
       cell: ({ row }) => (
         <OrderTags order={row.original} onOrderUpdated={onOrderUpdated} />
       ),
+    },
+    {
+      id: "source",
+      header: "Source",
+      enableSorting: false,
+      meta: { label: "Source" },
+      cell: ({ row }) => (
+        <Badge
+          className={cn(
+            "border-transparent",
+            SOURCE_BADGE_CLASS[row.original.source]
+          )}
+        >
+          {ORDER_SOURCE_LABELS[row.original.source]}
+        </Badge>
+      ),
+    },
+    {
+      id: "staff",
+      header: "Staff",
+      enableSorting: false,
+      meta: { label: "Staff" },
+      cell: ({ row }) =>
+        row.original.staffName ? (
+          // The nickname if one is set, otherwise a trimmed full name. The
+          // full name stays on hover either way.
+          <span title={row.original.staffName}>
+            {staffLabel(row.original.staffName, row.original.staffNickname)}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
+      id: "printed",
+      header: "Print",
+      enableSorting: false,
+      meta: { label: "Print" },
+      cell: ({ row }) => <FlagCell on={row.original.printed} />,
+    },
+    {
+      id: "courier",
+      header: "Courier",
+      enableSorting: false,
+      meta: { label: "Courier" },
+      cell: ({ row }) => <FlagCell on={row.original.courier} />,
+    },
+    {
+      id: "pathao",
+      header: "Pathao",
+      enableSorting: false,
+      meta: { label: "Pathao" },
+      cell: ({ row }) => <PathaoCell order={row.original} />,
     },
     {
       id: "status",
@@ -131,16 +243,32 @@ export function getOrderColumns({
       header: "Actions",
       enableSorting: false,
       enableHiding: false,
-      cell: ({ row }) => (
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => onOpen(row.original)}
-        >
-          Open
-          <ExternalLink className="ml-1 size-3.5" />
-        </Button>
-      ),
+      cell: ({ row }) => {
+        const claim = activeClaim(row.original);
+        const mine = claim?.id === currentUserId;
+        if (claim && !mine) {
+          // Someone else has the modal open: say who, and keep it closed.
+          return (
+            <span
+              title={`${claim.fullName} is working on this order`}
+              className="inline-flex items-center gap-1 rounded-md bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+            >
+              <Lock className="size-3" />
+              {claim.label}
+            </span>
+          );
+        }
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onOpen(row.original)}
+          >
+            {mine ? "Resume" : "Open"}
+            <ExternalLink className="ml-1 size-3.5" />
+          </Button>
+        );
+      },
     },
   ];
 }

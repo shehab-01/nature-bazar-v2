@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 import MetaPixel from "@/components/MetaPixel";
+import { bengali, manrope } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "Nature Bazar",
@@ -14,7 +15,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    // The root layout wraps the admin too, so one class serves both.
+    <html lang="en" className={`${manrope.variable} ${bengali.variable}`}>
       <body>
         <MetaPixel />
         {children}

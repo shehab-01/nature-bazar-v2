@@ -6,9 +6,11 @@ import { usePathname } from "next/navigation";
 import {
   ChevronRight,
   ChevronsUpDown,
+  Activity,
   LayoutDashboard,
   Leaf,
   LogOut,
+  Package,
   ShoppingCart,
   Users,
 } from "lucide-react";
@@ -44,7 +46,10 @@ import {
   SidebarMenuSubItem,
   SidebarRail,
 } from "@/components/ui/sidebar";
+import { PAGE_STATUSES, countForPage } from "@/lib/orders";
 import { ROLE_LABELS } from "@/lib/team";
+import { useOrderCounts } from "@/lib/use-order-counts";
+import { cn } from "@/lib/utils";
 
 const navItems = [
   { title: "Dashboard", url: "/admin", icon: LayoutDashboard },
@@ -53,7 +58,8 @@ const navItems = [
     url: "/admin/orders",
     icon: ShoppingCart,
     children: [
-      { title: "Web Order Lists", url: "/admin/orders" },
+      { title: "Manual Order", url: "/admin/orders/manual" },
+      { title: "Web Order List", url: "/admin/orders" },
       { title: "Incomplete", url: "/admin/orders/incomplete" },
       { title: "Good But No Response", url: "/admin/orders/good-but-no-response" },
       { title: "No Response", url: "/admin/orders/no-response" },
@@ -61,14 +67,18 @@ const navItems = [
       { title: "Confirmed Order", url: "/admin/orders/confirm" },
       { title: "Shipping", url: "/admin/orders/ship" },
       { title: "Cancelled", url: "/admin/orders/cancelled" },
+      { title: "History", url: "/admin/orders/history" },
     ],
   },
+  { title: "Products", url: "/admin/products", icon: Package, superAdminOnly: true },
   { title: "Users", url: "/admin/users", icon: Users, superAdminOnly: true },
+  { title: "System", url: "/admin/system", icon: Activity, superAdminOnly: true },
 ];
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const counts = useOrderCounts();
 
   const items = navItems.filter(
     (item) => !item.superAdminOnly || user.role === "super_admin"
@@ -124,18 +134,43 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                         </CollapsibleTrigger>
                         <CollapsibleContent>
                           <SidebarMenuSub>
-                            {item.children.map((child) => (
-                              <SidebarMenuSubItem key={child.title}>
-                                <SidebarMenuSubButton
-                                  asChild
-                                  isActive={pathname === child.url}
-                                >
-                                  <Link href={child.url}>
-                                    <span>{child.title}</span>
-                                  </Link>
-                                </SidebarMenuSubButton>
-                              </SidebarMenuSubItem>
-                            ))}
+                            {item.children.map((child) => {
+                              // null until the first fetch lands, so the
+                              // counters don't flash a wrong 0 on every load —
+                              // and null for a page that holds no orders at
+                              // all, like the Manual Order form, which would
+                              // otherwise wear a permanent 0.
+                              const count =
+                                counts && PAGE_STATUSES[child.url]
+                                  ? countForPage(child.url, counts)
+                                  : null;
+                              return (
+                                <SidebarMenuSubItem key={child.title}>
+                                  <SidebarMenuSubButton
+                                    asChild
+                                    isActive={pathname === child.url}
+                                  >
+                                    <Link href={child.url}>
+                                      <span className="truncate">
+                                        {child.title}
+                                      </span>
+                                      {count !== null && (
+                                        <span
+                                          className={cn(
+                                            "ml-auto shrink-0 text-xs tabular-nums",
+                                            count > 0
+                                              ? "font-medium text-sidebar-foreground"
+                                              : "text-muted-foreground/60"
+                                          )}
+                                        >
+                                          {count}
+                                        </span>
+                                      )}
+                                    </Link>
+                                  </SidebarMenuSubButton>
+                                </SidebarMenuSubItem>
+                              );
+                            })}
                           </SidebarMenuSub>
                         </CollapsibleContent>
                       </SidebarMenuItem>

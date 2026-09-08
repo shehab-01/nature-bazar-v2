@@ -2,7 +2,13 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { ArrowUpRight, Clock3, PackageCheck, ShoppingBag } from "lucide-react";
+import {
+  ArrowUpRight,
+  Clock3,
+  FileWarning,
+  PackageCheck,
+  ShoppingBag,
+} from "lucide-react";
 
 import {
   Card,
@@ -48,16 +54,19 @@ export default function AdminDashboardPage() {
       value: stats ? `৳${stats.revenue.toLocaleString()}` : undefined,
       icon: ArrowUpRight,
     },
+    {
+      label: "Incomplete",
+      value: stats?.incomplete.toLocaleString(),
+      icon: FileWarning,
+    },
   ];
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">Dashboard</h2>
-        <p className="text-sm text-muted-foreground">
-          Overview of your store&apos;s orders.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Incomplete forms are counted on their own — nobody ordered them, so they
+        are left out of the order totals and revenue.
+      </p>
 
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
@@ -65,7 +74,7 @@ export default function AdminDashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {cards.map((card) => (
           <Card key={card.label}>
             <CardHeader>

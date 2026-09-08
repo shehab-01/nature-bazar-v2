@@ -1,8 +1,9 @@
 "use client";
 
 import type { ColumnDef } from "@tanstack/react-table";
-import { ArrowUpDown, MoreHorizontal } from "lucide-react";
+import { MoreHorizontal } from "lucide-react";
 
+import { SortableHeader } from "@/components/admin/data-table/data-table-sort-header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,31 +17,19 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ROLE_LABELS, type TeamMember, type UserStatus } from "@/lib/team";
 
-function SortableHeader({
-  label,
-  onClick,
-}: {
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <Button variant="ghost" size="sm" onClick={onClick} className="-ml-3">
-      {label}
-      <ArrowUpDown className="ml-1 size-3.5" />
-    </Button>
-  );
-}
-
 export function getTeamColumns({
   currentUserId,
   onStatusChange,
+  onEditNickname,
 }: {
   currentUserId: number;
   onStatusChange: (id: number, status: UserStatus) => void;
+  onEditNickname: (member: TeamMember) => void;
 }): ColumnDef<TeamMember>[] {
   return [
     {
       accessorKey: "name",
+      meta: { label: "Member" },
       header: "Member",
       cell: ({ row }) => (
         <div className="flex items-center gap-3">
@@ -67,12 +56,26 @@ export function getTeamColumns({
         const search = String(filterValue).toLowerCase();
         return (
           row.original.name.toLowerCase().includes(search) ||
-          row.original.email.toLowerCase().includes(search)
+          row.original.email.toLowerCase().includes(search) ||
+          (row.original.nickname ?? "").toLowerCase().includes(search)
         );
       },
     },
     {
+      accessorKey: "nickname",
+      meta: { label: "Nickname" },
+      header: "Nickname",
+      enableSorting: false,
+      cell: ({ row }) =>
+        row.original.nickname ? (
+          <Badge variant="secondary">{row.original.nickname}</Badge>
+        ) : (
+          <span className="text-muted-foreground">—</span>
+        ),
+    },
+    {
       accessorKey: "role",
+      meta: { label: "Role" },
       header: "Role",
       cell: ({ row }) => (
         <Badge
@@ -84,6 +87,7 @@ export function getTeamColumns({
     },
     {
       accessorKey: "status",
+      meta: { label: "Status" },
       header: "Status",
       cell: ({ row }) => (
         <Badge
@@ -97,6 +101,7 @@ export function getTeamColumns({
     },
     {
       accessorKey: "ordersConfirmed",
+      meta: { label: "Confirmed" },
       header: ({ column }) => (
         <SortableHeader
           label="Confirmed"
@@ -109,6 +114,7 @@ export function getTeamColumns({
     },
     {
       accessorKey: "ordersShipped",
+      meta: { label: "Shipped" },
       header: ({ column }) => (
         <SortableHeader
           label="Shipped"
@@ -121,6 +127,7 @@ export function getTeamColumns({
     },
     {
       accessorKey: "lastActiveAt",
+      meta: { label: "Last active" },
       header: ({ column }) => (
         <SortableHeader
           label="Last active"
@@ -142,12 +149,12 @@ export function getTeamColumns({
       enableSorting: false,
       enableHiding: false,
       cell: ({ row }) => {
-        if (
-          row.original.role === "super_admin" ||
-          row.original.id === currentUserId
-        ) {
-          return null;
-        }
+        // Suspending is what could lock someone out, so it stays off limits
+        // for super admins and for your own account. A nickname is only a
+        // label, so anyone on the team can be given one.
+        const canChangeAccess =
+          row.original.role !== "super_admin" &&
+          row.original.id !== currentUserId;
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -158,20 +165,25 @@ export function getTeamColumns({
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              {row.original.status === "active" ? (
-                <DropdownMenuItem
-                  className="text-destructive"
-                  onClick={() => onStatusChange(row.original.id, "suspended")}
-                >
-                  Suspend access
-                </DropdownMenuItem>
-              ) : (
-                <DropdownMenuItem
-                  onClick={() => onStatusChange(row.original.id, "active")}
-                >
-                  Reactivate
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem onClick={() => onEditNickname(row.original)}>
+                {row.original.nickname ? "Change nickname" : "Set nickname"}
+              </DropdownMenuItem>
+              {canChangeAccess && <DropdownMenuSeparator />}
+              {canChangeAccess &&
+                (row.original.status === "active" ? (
+                  <DropdownMenuItem
+                    className="text-destructive"
+                    onClick={() => onStatusChange(row.original.id, "suspended")}
+                  >
+                    Suspend access
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => onStatusChange(row.original.id, "active")}
+                  >
+                    Reactivate
+                  </DropdownMenuItem>
+                ))}
             </DropdownMenuContent>
           </DropdownMenu>
         );

@@ -1,8 +1,9 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Phone } from "lucide-react";
+import { ArrowLeft, ExternalLink, Phone } from "lucide-react";
 
+import { useAuth } from "@/components/admin/auth-context";
 import { OrderTags } from "@/components/admin/orders/order-tags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
@@ -26,13 +28,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { updateOrder } from "@/lib/api";
 import {
   CHANGE_STATUS_OPTIONS,
+  ORDER_SOURCE_LABELS,
   ORDER_STATUS_LABELS,
+  SOURCE_BADGE_CLASS,
   STATUS_BADGE_CLASS,
+  STATUS_PAGES,
+  activeClaim,
   formatOrderDateTime,
+  staffLabel,
   timeAgo,
   type Order,
   type OrderStatus,
 } from "@/lib/orders";
+import { toBdMobile } from "@/lib/phone";
 import { cn } from "@/lib/utils";
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
@@ -54,6 +62,7 @@ export function OrderDetailsModal({
   onOpenChange: (open: boolean) => void;
   onOrderUpdated: (order: Order) => void;
 }) {
+  const { user } = useAuth();
   const [pendingStatus, setPendingStatus] = React.useState<OrderStatus | null>(
     null
   );
@@ -64,6 +73,9 @@ export function OrderDetailsModal({
   const [editAddress, setEditAddress] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  // Unsaved edits are reviewed before a status change or before closing:
+  // which of the two the person was doing decides what happens after Save.
+  const [review, setReview] = React.useState<"status" | "close" | null>(null);
 
   React.useEffect(() => {
     if (order) {
@@ -74,10 +86,29 @@ export function OrderDetailsModal({
       setEditPhone(order.phone);
       setEditAddress(order.address);
       setError(null);
+      setReview(null);
     }
   }, [order?.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!order) return null;
+
+  const claim = activeClaim(order);
+
+  // Orders written before line items existed carry only the summary columns,
+  // so fall back to a single synthetic line rather than showing an empty list.
+  const lines =
+    order.items.length > 0
+      ? order.items
+      : [
+          {
+            id: 0,
+            productId: null,
+            productName: order.product,
+            unitPrice: order.unitPrice,
+            quantity: order.quantity,
+            lineTotal: order.total,
+          },
+        ];
 
   const discountAmount = Math.min(
     Math.max(Number(discount) || 0, 0),
@@ -85,17 +116,69 @@ export function OrderDetailsModal({
   );
   const grandTotal = order.total - discountAmount;
 
-  const detailsDirty =
-    editName.trim() !== order.customerName ||
-    editPhone.trim() !== order.phone ||
-    editAddress.trim() !== order.address;
+  // Every field edit that hasn't reached the server yet, for the review
+  // prompt. Blank name/phone/address are ignored: the server rejects them.
+  const changes: { field: string; from: string; to: string }[] = [];
+  if (editName.trim() && editName.trim() !== order.customerName) {
+    changes.push({ field: "Name", from: order.customerName, to: editName.trim() });
+  }
+  // Phones are stored in the courier's 01XXXXXXXXX form; a number that can't
+  // be read that way is flagged rather than saved.
+  const phoneNormalised = editPhone.trim() ? toBdMobile(editPhone) : null;
+  const phoneInvalid = editPhone.trim() !== "" && phoneNormalised === null;
+  if (phoneNormalised && phoneNormalised !== order.phone) {
+    changes.push({ field: "Phone", from: order.phone, to: phoneNormalised });
+  }
+  if (editAddress.trim() && editAddress.trim() !== order.address) {
+    changes.push({ field: "Address", from: order.address, to: editAddress.trim() });
+  }
+  if (note !== order.comment) {
+    changes.push({ field: "Note", from: order.comment, to: note });
+  }
+  const detailsPatch = {
+    customerName: editName.trim() || undefined,
+    phone: phoneNormalised ?? undefined,
+    address: editAddress.trim() || undefined,
+    comment: note !== order.comment ? note : undefined,
+  };
 
-  const saveDetails = () =>
-    run({
-      customerName: editName.trim(),
-      phone: editPhone.trim(),
-      address: editAddress.trim(),
+  const discardEdits = () => {
+    setEditName(order.customerName);
+    setEditPhone(order.phone);
+    setEditAddress(order.address);
+    setNote(order.comment);
+  };
+
+  // "Update": save the edits along with the status, after a look at them.
+  const requestStatusChange = () => {
+    if (!pendingStatus) return;
+    if (changes.length) setReview("status");
+    else void run({ status: pendingStatus });
+  };
+
+  // Closing (Back, Escape, overlay click): unsaved edits get a chance first.
+  const requestClose = () => {
+    if (changes.length && !busy) setReview("close");
+    else onOpenChange(false);
+  };
+
+  const saveReviewed = async () => {
+    const intent = review;
+    setReview(null);
+    const ok = await run({
+      ...detailsPatch,
+      status: intent === "status" && pendingStatus ? pendingStatus : undefined,
     });
+    if (ok && intent === "close") onOpenChange(false);
+  };
+
+  const discardReviewed = () => {
+    const intent = review;
+    setReview(null);
+    discardEdits();
+    if (intent === "status" && pendingStatus) void run({ status: pendingStatus });
+    if (intent === "close") onOpenChange(false);
+  };
 
   const run = async (patch: {
     status?: OrderStatus;
@@ -119,7 +202,7 @@ export function OrderDetailsModal({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : requestClose())}>
       <DialogContent className="flex max-h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-6xl">
         <DialogHeader className="flex-row items-center justify-between gap-4 space-y-0 border-b px-6 py-4">
           <div>
@@ -129,11 +212,22 @@ export function OrderDetailsModal({
             </DialogDescription>
           </div>
           <div className="flex flex-wrap items-center gap-2 pr-8">
+            {claim && (
+              <Badge className="border-transparent bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                <span className="mr-1.5 inline-block size-1.5 animate-pulse rounded-full bg-current" />
+                Processing · {claim.id === user.id ? "you" : claim.label}
+              </Badge>
+            )}
             <Badge className={cn("border-transparent", STATUS_BADGE_CLASS[order.status])}>
               {ORDER_STATUS_LABELS[order.status]}
             </Badge>
-            <Badge className="border-transparent bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-              WEB
+            <Badge
+              className={cn(
+                "border-transparent",
+                SOURCE_BADGE_CLASS[order.source]
+              )}
+            >
+              {ORDER_SOURCE_LABELS[order.source]}
             </Badge>
             <Badge variant="outline" className="font-normal text-muted-foreground">
               Created&nbsp;
@@ -166,7 +260,8 @@ export function OrderDetailsModal({
                       onChange={(e) =>
                         setEditPhone(e.target.value.replace(/[^0-9+]/g, ""))
                       }
-                      className="pr-9"
+                      className={cn("pr-9", phoneInvalid && "border-destructive")}
+                      aria-invalid={phoneInvalid || undefined}
                     />
                     <div className="absolute inset-y-0 right-3 flex items-center">
                       <a
@@ -178,6 +273,11 @@ export function OrderDetailsModal({
                       </a>
                     </div>
                   </div>
+                  {phoneInvalid && (
+                    <p className="text-xs text-destructive">
+                      Needs 11 digits starting with 01 — the courier rejects anything else.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <Label>Name</Label>
@@ -200,16 +300,6 @@ export function OrderDetailsModal({
                     rows={3}
                   />
                 </div>
-                {detailsDirty && (
-                  <Button
-                    size="sm"
-                    className="mt-3"
-                    disabled={busy}
-                    onClick={saveDetails}
-                  >
-                    Save Details
-                  </Button>
-                )}
               </div>
             </div>
 
@@ -217,28 +307,32 @@ export function OrderDetailsModal({
               <div className="flex items-center gap-2">
                 <SectionLabel>Ordered products</SectionLabel>
                 <Badge variant="secondary" className="rounded-sm">
-                  1
+                  {lines.length}
                 </Badge>
               </div>
-              <div className="rounded-xl border p-4">
-                <p className="text-sm font-medium">{order.product}</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  ৳{order.unitPrice.toLocaleString()} each
-                </p>
-                <div className="mt-4 grid gap-4 sm:grid-cols-3">
-                  <div className="space-y-1.5">
-                    <Label>Qty</Label>
-                    <Input readOnly value={order.quantity} />
+              <div className="flex flex-col gap-3">
+                {lines.map((line, index) => (
+                  <div key={line.id ?? index} className="rounded-xl border p-4">
+                    <p className="text-sm font-medium">{line.productName}</p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      ৳{line.unitPrice.toLocaleString()} each
+                    </p>
+                    <div className="mt-4 grid gap-4 sm:grid-cols-3">
+                      <div className="space-y-1.5">
+                        <Label>Qty</Label>
+                        <Input readOnly value={line.quantity} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Price</Label>
+                        <Input readOnly value={line.unitPrice} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Total</Label>
+                        <Input readOnly value={line.lineTotal.toFixed(2)} />
+                      </div>
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Price</Label>
-                    <Input readOnly value={order.unitPrice} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Total</Label>
-                    <Input readOnly value={order.total.toFixed(2)} />
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -276,17 +370,19 @@ export function OrderDetailsModal({
             </div>
 
             {order.status !== "confirmed" && order.status !== "shipped" && (
-              <Button
-                size="lg"
-                disabled={busy}
-                className="bg-emerald-600 text-white hover:bg-emerald-700"
-                onClick={async () => {
-                  const ok = await run({ status: "confirmed" });
-                  if (ok) onOpenChange(false);
-                }}
-              >
-                Approve Order (৳{grandTotal.toLocaleString()})
-              </Button>
+              <div className="flex flex-col gap-1.5">
+                <Button
+                  size="lg"
+                  disabled={busy}
+                  className="bg-emerald-600 text-white hover:bg-emerald-700"
+                  onClick={() => run({ status: "confirmed" })}
+                >
+                  Approve Order (৳{grandTotal.toLocaleString()})
+                </Button>
+                <p className="text-center text-xs text-muted-foreground">
+                  Marks the order Confirmed and moves it to Confirmed Order.
+                </p>
+              </div>
             )}
           </div>
 
@@ -319,9 +415,50 @@ export function OrderDetailsModal({
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground uppercase">Source</p>
-                    <p className="mt-0.5 font-medium">Website</p>
+                    <p className="mt-0.5 font-medium">
+                      {ORDER_SOURCE_LABELS[order.source]}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase">Staff</p>
+                    <p
+                      className="mt-0.5 font-medium"
+                      title={order.staffName ?? undefined}
+                    >
+                      {order.staffName ? (
+                        staffLabel(order.staffName, order.staffNickname)
+                      ) : (
+                        <span className="text-muted-foreground">
+                          Not handled yet
+                        </span>
+                      )}
+                    </p>
                   </div>
                 </div>
+                {order.pathaoConsignmentId && (
+                  <div className="mt-4 rounded-lg border border-indigo-200 bg-indigo-50/60 p-3 dark:border-indigo-900 dark:bg-indigo-950/30">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs text-muted-foreground uppercase">Pathao</p>
+                      {order.pathaoStatus && (
+                        <span className="text-xs font-medium">{order.pathaoStatus}</span>
+                      )}
+                    </div>
+                    <a
+                      href={order.pathaoTrackingUrl ?? "#"}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="mt-1 inline-flex items-center gap-1 font-mono text-sm font-semibold text-blue-700 underline underline-offset-2 dark:text-blue-400"
+                    >
+                      {order.pathaoConsignmentId}
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                    {order.pathaoDeliveryFee !== null && (
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        Delivery fee ৳{order.pathaoDeliveryFee}
+                      </p>
+                    )}
+                  </div>
+                )}
                 <div className="mt-4 rounded-lg bg-muted/50 p-3">
                   <div className="flex justify-between text-muted-foreground">
                     <span>Subtotal</span>
@@ -373,15 +510,24 @@ export function OrderDetailsModal({
                       busy || !pendingStatus || pendingStatus === order.status
                     }
                     className="bg-emerald-500 text-white hover:bg-emerald-600"
-                    onClick={() => pendingStatus && run({ status: pendingStatus })}
+                    onClick={requestStatusChange}
                   >
                     Update
                   </Button>
-                  <Button variant="outline" onClick={() => onOpenChange(false)}>
+                  <Button variant="outline" onClick={requestClose}>
                     <ArrowLeft className="mr-1 size-4" />
                     Back
                   </Button>
                 </div>
+                {pendingStatus && pendingStatus !== order.status && (
+                  <p className="text-xs text-muted-foreground">
+                    Moves this order to{" "}
+                    <span className="font-medium text-foreground">
+                      {STATUS_PAGES[pendingStatus].title}
+                    </span>
+                    .
+                  </p>
+                )}
                 <div className="rounded-lg border p-3">
                   <Label className="mb-1.5 block">Note</Label>
                   <Textarea
@@ -404,6 +550,46 @@ export function OrderDetailsModal({
           </div>
         </div>
       </DialogContent>
+
+      <Dialog open={review !== null} onOpenChange={(next) => !next && setReview(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Unsaved changes</DialogTitle>
+            <DialogDescription>
+              {review === "status"
+                ? "Save these edits together with the status change, or discard them and change only the status?"
+                : "Save these edits before closing, or discard them?"}
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="flex max-h-[50svh] flex-col gap-2 overflow-y-auto text-sm">
+            {changes.map((change) => (
+              <li key={change.field} className="rounded-lg border p-3">
+                <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                  {change.field}
+                </p>
+                <p className="mt-1 whitespace-pre-wrap text-muted-foreground line-through">
+                  {change.from || <span className="italic no-underline">empty</span>}
+                </p>
+                <p className="mt-0.5 whitespace-pre-wrap font-medium">
+                  {change.to || <span className="italic">empty</span>}
+                </p>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={discardReviewed} disabled={busy}>
+              Discard
+            </Button>
+            <Button
+              className="bg-emerald-500 text-white hover:bg-emerald-600"
+              onClick={saveReviewed}
+              disabled={busy}
+            >
+              {review === "status" ? "Save & update" : "Save & close"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

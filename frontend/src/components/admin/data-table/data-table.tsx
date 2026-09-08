@@ -14,15 +14,9 @@ import {
   getSortedRowModel,
   useReactTable,
 } from "@tanstack/react-table";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -42,8 +36,18 @@ import {
 import { cn } from "@/lib/utils";
 import { DataTableDateFilter } from "./data-table-date-filter";
 import { DataTableFacetedFilter } from "./data-table-faceted-filter";
+import { DataTableViewOptions } from "./data-table-view-options";
 
 const PAGE_SIZE_OPTIONS = [10, 25, 50, 100];
+
+/** What a page's bulk-action bar gets to work with. */
+export type SelectionContext<TData> = {
+  /** Selected rows that are on screen right now. */
+  rows: TData[];
+  clear: () => void;
+  selectAllPage: () => void;
+  allPageSelected: boolean;
+};
 
 export type DataTableQuery = {
   pagination: PaginationState;
@@ -67,7 +71,16 @@ interface DataTableProps<TData, TValue> {
   };
   initialColumnFilters?: ColumnFiltersState;
   initialColumnVisibility?: VisibilityState;
+  /** Where to remember this table's saved column layout. Omit to disable. */
+  storageKey?: string;
   getRowClassName?: (row: TData) => string | undefined;
+  /** Stable row identity, so ticks survive a background refetch. */
+  getRowId?: (row: TData) => string;
+  /**
+   * Floating panel shown while rows are ticked — the page's bulk actions.
+   * Nothing is rendered when it is omitted or when nothing is selected.
+   */
+  selectionBar?: (ctx: SelectionContext<TData>) => React.ReactNode;
   /** When set, pagination/filtering/sorting run on the server: the table
    * reports query changes and renders `data` as-is. */
   serverSide?: {
@@ -87,15 +100,58 @@ export function DataTable<TData, TValue>({
   dateFilter,
   initialColumnFilters,
   initialColumnVisibility,
+  storageKey,
   getRowClassName,
+  getRowId,
+  selectionBar,
   serverSide,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [columnFilters, setColumnFilters] = React.useState<ColumnFiltersState>(
     initialColumnFilters ?? []
   );
+  const defaultVisibility = React.useMemo(
+    () => initialColumnVisibility ?? {},
+    // Pages pass an object literal, so pin the identity to the contents.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [JSON.stringify(initialColumnVisibility ?? {})]
+  );
   const [columnVisibility, setColumnVisibility] =
-    React.useState<VisibilityState>(initialColumnVisibility ?? {});
+    React.useState<VisibilityState>(defaultVisibility);
+
+  // A layout saved earlier in this browser wins over the page defaults. Read
+  // after mount so the server and the first client render agree.
+  React.useEffect(() => {
+    if (!storageKey) return;
+    try {
+      const saved = localStorage.getItem(`nb.columns.${storageKey}`);
+      if (saved) setColumnVisibility({ ...defaultVisibility, ...JSON.parse(saved) });
+    } catch {
+      // Unreadable or corrupt: the page defaults are a fine fallback.
+    }
+  }, [storageKey, defaultVisibility]);
+
+  const saveColumnLayout = React.useCallback(() => {
+    if (!storageKey) return;
+    try {
+      localStorage.setItem(
+        `nb.columns.${storageKey}`,
+        JSON.stringify(columnVisibility)
+      );
+    } catch {
+      // Storage full or blocked; the layout still holds for this session.
+    }
+  }, [storageKey, columnVisibility]);
+
+  const resetColumnLayout = React.useCallback(() => {
+    setColumnVisibility(defaultVisibility);
+    if (!storageKey) return;
+    try {
+      localStorage.removeItem(`nb.columns.${storageKey}`);
+    } catch {
+      // Nothing saved to clear.
+    }
+  }, [storageKey, defaultVisibility]);
   const [rowSelection, setRowSelection] = React.useState({});
   const [pagination, setPagination] = React.useState<PaginationState>({
     pageIndex: 0,
@@ -107,6 +163,7 @@ export function DataTable<TData, TValue>({
   const table = useReactTable({
     data,
     columns,
+    getRowId,
     onSortingChange: setSorting,
     onColumnFiltersChange: setColumnFilters,
     onPaginationChange: setPagination,
@@ -161,8 +218,19 @@ export function DataTable<TData, TValue>({
     ? serverSide.total
     : table.getFilteredRowModel().rows.length;
 
+  const selectedRows = table.getSelectedRowModel().rows.map((row) => row.original);
+  const selectionPanel =
+    selectionBar && selectedRows.length > 0
+      ? selectionBar({
+          rows: selectedRows,
+          clear: () => table.resetRowSelection(),
+          selectAllPage: () => table.toggleAllPageRowsSelected(true),
+          allPageSelected: table.getIsAllPageRowsSelected(),
+        })
+      : null;
+
   return (
-    <div className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs">
+    <div className="relative flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-xs">
       <div className="flex items-center gap-2 overflow-x-auto pb-1">
         {searchColumn ? (
           <Input
@@ -192,33 +260,17 @@ export function DataTable<TData, TValue>({
           <Loader2 className="size-4 shrink-0 animate-spin text-muted-foreground" />
         ) : null}
         <div className="flex-1" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" size="sm" className="shrink-0">
-              Columns <ChevronDown className="ml-1 size-3.5" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {table
-              .getAllColumns()
-              .filter((column) => column.getCanHide())
-              .map((column) => (
-                <DropdownMenuCheckboxItem
-                  key={column.id}
-                  className="capitalize"
-                  checked={column.getIsVisible()}
-                  onCheckedChange={(value) => column.toggleVisibility(!!value)}
-                >
-                  {column.id}
-                </DropdownMenuCheckboxItem>
-              ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <DataTableViewOptions
+          table={table}
+          canSave={!!storageKey}
+          onSave={saveColumnLayout}
+          onReset={resetColumnLayout}
+        />
       </div>
 
       <div className="overflow-hidden rounded-lg border">
         <Table>
-          <TableHeader className="bg-muted/50">
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => (
@@ -312,6 +364,8 @@ export function DataTable<TData, TValue>({
           </div>
         </div>
       </div>
+
+      {selectionPanel}
     </div>
   );
 }

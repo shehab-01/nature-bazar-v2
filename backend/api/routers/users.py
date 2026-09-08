@@ -51,9 +51,13 @@ async def update_user(
     admin: User = Depends(require_super_admin),
     session: AsyncSession = Depends(get_session),
 ) -> User:
-    if payload.status is None and payload.role is None:
+    if payload.status is None and payload.role is None and payload.nickname is None:
         raise HTTPException(status_code=400, detail="Nothing to update")
-    if user_id == admin.id:
+    # Role and status changes are the ones that could lock an admin out of
+    # their own account; renaming yourself is harmless.
+    if user_id == admin.id and (
+        payload.status is not None or payload.role is not None
+    ):
         raise HTTPException(status_code=400, detail="Cannot change your own account")
 
     user = await session.get(User, user_id)
@@ -64,6 +68,10 @@ async def update_user(
         user.status = payload.status
     if payload.role is not None:
         user.role = payload.role
+    if payload.nickname is not None:
+        nickname = payload.nickname.strip()
+        # Blank means "go back to the full name" rather than an empty label.
+        user.nickname = nickname or None
     await session.commit()
     return user
 

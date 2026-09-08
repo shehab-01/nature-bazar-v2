@@ -63,7 +63,11 @@ def build_purchase_event(
     unit_price: int,
     created_at: float | None,
     ctx: ClientContext,
+    # The active product's catalogue id. Falls back to the configured one so a
+    # caller that predates the products table still works.
+    sku: str | None = None,
 ) -> dict:
+    content_id = sku or settings.product_sku
     first_name = customer_name.strip().split()[0].lower() if customer_name.strip() else ""
     user_data: dict = {"country": [_sha256("bd")]}
     if first_name:
@@ -91,10 +95,10 @@ def build_purchase_event(
             "currency": CURRENCY,
             "value": value,
             "content_type": "product",
-            "content_ids": [settings.product_sku],
+            "content_ids": [content_id],
             "contents": [
                 {
-                    "id": settings.product_sku,
+                    "id": content_id,
                     "quantity": quantity,
                     "item_price": unit_price,
                 }

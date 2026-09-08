@@ -5,6 +5,7 @@ import * as React from "react";
 import { useAuth } from "@/components/admin/auth-context";
 import { DataTable } from "@/components/admin/data-table/data-table";
 import { getTeamColumns } from "@/components/admin/users/columns";
+import { NicknameDialog } from "@/components/admin/users/nickname-dialog";
 import { PendingRequests } from "@/components/admin/users/pending-requests";
 import { deleteUser, listUsers, updateUser } from "@/lib/api";
 import type { TeamMember, UserStatus } from "@/lib/team";
@@ -66,11 +67,26 @@ export default function UsersPage() {
     [refresh]
   );
 
+  const [nicknameFor, setNicknameFor] = React.useState<TeamMember | null>(null);
+
+  const handleNickname = React.useCallback(
+    async (id: number, nickname: string) => {
+      try {
+        await updateUser(id, { nickname });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to set nickname");
+      }
+    },
+    [refresh]
+  );
+
   const columns = React.useMemo(
     () =>
       getTeamColumns({
         currentUserId: currentUser.id,
         onStatusChange: handleStatusChange,
+        onEditNickname: setNicknameFor,
       }),
     [currentUser.id, handleStatusChange]
   );
@@ -80,15 +96,10 @@ export default function UsersPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h2 className="text-xl font-semibold text-foreground">
-          Users &amp; access
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          Approve sign-in requests and keep track of what each staff member
-          has done.
-        </p>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        Approve sign-in requests and keep track of what each staff member has
+        done.
+      </p>
 
       {error && (
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-2 text-sm text-destructive">
@@ -113,10 +124,17 @@ export default function UsersPage() {
               data={team}
               searchColumnId="name"
               searchPlaceholder="Search by name or email..."
+              storageKey="users"
             />
           </div>
         </>
       )}
+
+      <NicknameDialog
+        member={nicknameFor}
+        onOpenChange={(open) => !open && setNicknameFor(null)}
+        onSave={handleNickname}
+      />
     </div>
   );
 }

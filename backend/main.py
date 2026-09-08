@@ -3,23 +3,31 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import text
 
+from api import monitoring
 from api.config import settings
 from api.db import engine
 from api.routers.auth import router as auth_router
 from api.routers.orders import router as orders_router
+from api.routers.products import public_router as storefront_router
+from api.routers.products import router as products_router
+from api.routers.system import router as system_router
 from api.routers.users import router as users_router
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    monitoring.start()
     yield
+    await monitoring.stop()
     await engine.dispose()
 
 
 app = FastAPI(title="Nature Bazar API", version="0.2.0", lifespan=lifespan)
 
+app.add_middleware(monitoring.TrafficMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
@@ -31,6 +39,15 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(users_router, prefix="/api")
+app.include_router(system_router, prefix="/api")
+app.include_router(products_router, prefix="/api")
+app.include_router(storefront_router, prefix="/api")
+
+# Uploaded product images. settings.media_root is a mounted volume, so the
+# directory may not exist on a first boot; StaticFiles refuses to mount a
+# missing directory, hence the mkdir.
+os.makedirs(settings.media_root, exist_ok=True)
+app.mount("/media", StaticFiles(directory=settings.media_root), name="media")
 
 
 @app.get("/")

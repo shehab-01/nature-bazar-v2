@@ -14,6 +14,7 @@ from api.auth import (
 from api.config import settings
 from api.db import get_session
 from api.models import User, UserRole, UserStatus
+from api.ratelimit import logins_limiter
 from api.schemas import UserOut
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
@@ -33,7 +34,9 @@ def _verify_google_token(credential: str) -> dict:
     )
 
 
-@router.post("/google", response_model=UserOut)
+@router.post(
+    "/google", response_model=UserOut, dependencies=[Depends(logins_limiter)]
+)
 async def login_with_google(
     payload: GoogleLogin,
     response: Response,

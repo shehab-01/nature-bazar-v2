@@ -3,6 +3,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     DateTime,
     Enum,
     ForeignKey,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     func,
+    text,
 )
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -30,6 +32,18 @@ class OrderStatus(str, enum.Enum):
     confirmed = "confirmed"
     shipped = "shipped"
     cancelled = "cancelled"
+    # The archive: a finished order, moved off the Shipping list by hand so
+    # that list only ever shows parcels still in flight.
+    history = "history"
+
+
+class OrderSource(str, enum.Enum):
+    """How the order entered the system."""
+
+    website = "website"
+    # Started life as an abandoned storefront form and was worked from the
+    # Incomplete list, so confirmations here measure recovered leads.
+    incomplete = "incomplete"
 
 
 class UserRole(str, enum.Enum):
@@ -68,21 +82,55 @@ class Order(Base):
         String(30), default=OrderStatus.processing.value, index=True
     )
     comment: Mapped[str] = mapped_column(Text, default="")
+    # Set when the row came from an abandoned storefront form rather than a
+    # submitted order: the browser's per-visit key, so repeated autosaves keep
+    # updating one row and a later submit promotes that same row.
+    draft_key: Mapped[str | None] = mapped_column(String(64), unique=True)
+    # Normalised phone (see api.phone) — the identity used to make sure one
+    # customer never sits in Incomplete and in the live order lists at once.
+    phone_key: Mapped[str | None] = mapped_column(String(20), index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), index=True
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+    source: Mapped[str] = mapped_column(
+        String(20), default=OrderSource.website.value, index=True
+    )
+    # Whether the invoice has been printed and the parcel handed to a courier.
+    # Set by hand for now; the automation lands later.
+    printed: Mapped[bool] = mapped_column(Boolean, default=False)
+    courier: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Set once the parcel is booked with Pathao (see api.services.pathao).
+    # The consignment id is Pathao's tracking number; status and fee are
+    # whatever Pathao last told us.
+    pathao_consignment_id: Mapped[str | None] = mapped_column(String(40), index=True)
+    pathao_status: Mapped[str | None] = mapped_column(String(60))
+    pathao_delivery_fee: Mapped[int | None] = mapped_column(Integer)
+    pathao_sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Which worker has claimed this order (is calling the customer).
     assigned_to: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), index=True
     )
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Who last moved this order's status. On a confirmed order that is whoever
+    # confirmed it; on any other list, whoever put it there.
+    handled_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
 
-    assignee: Mapped["User | None"] = relationship(lazy="joined")
+    assignee: Mapped["User | None"] = relationship(
+        lazy="joined", foreign_keys=[assigned_to]
+    )
+    handler: Mapped["User | None"] = relationship(
+        lazy="joined", foreign_keys=[handled_by]
+    )
     tags: Mapped[list["OrderTag"]] = relationship(
         lazy="selectin", order_by="OrderTag.id", cascade="all, delete-orphan"
+    )
+    items: Mapped[list["OrderItem"]] = relationship(
+        lazy="selectin", order_by="OrderItem.id", cascade="all, delete-orphan"
     )
 
     @property
@@ -92,6 +140,30 @@ class Order(Base):
         if "assignee" in sa_inspect(self).unloaded:
             return None
         return self.assignee.name if self.assignee else None
+
+    @property
+    def handled_by_name(self) -> str | None:
+        if "handler" in sa_inspect(self).unloaded:
+            return None
+        return self.handler.name if self.handler else None
+
+    @property
+    def assigned_to_nickname(self) -> str | None:
+        if "assignee" in sa_inspect(self).unloaded:
+            return None
+        return self.assignee.nickname if self.assignee else None
+
+    @property
+    def assigned_to_display(self) -> str | None:
+        if "assignee" in sa_inspect(self).unloaded:
+            return None
+        return self.assignee.display_name if self.assignee else None
+
+    @property
+    def handled_by_nickname(self) -> str | None:
+        if "handler" in sa_inspect(self).unloaded:
+            return None
+        return self.handler.nickname if self.handler else None
 
     __table_args__ = (
         # The admin list query: WHERE status IN (...) ORDER BY created_at DESC
@@ -105,6 +177,10 @@ class User(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(120))
+    # A short working name a super admin gives this person. Google supplies the
+    # legal name, which is long and often shares an honorific with half the
+    # team, so the nickname is what the admin UI shows.
+    nickname: Mapped[str | None] = mapped_column(String(40))
     picture_url: Mapped[str | None] = mapped_column(String(500))
     role: Mapped[UserRole] = mapped_column(
         _enum(UserRole, "user_role"), default=UserRole.staff
@@ -116,6 +192,11 @@ class User(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     last_active_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    @property
+    def display_name(self) -> str:
+        """What this person is called in the UI."""
+        return self.nickname or self.name
 
 
 class OrderTag(Base):
@@ -141,6 +222,12 @@ class OrderTag(Base):
             return None
         return self.creator.name if self.creator else None
 
+    @property
+    def created_by_nickname(self) -> str | None:
+        if "creator" in sa_inspect(self).unloaded:
+            return None
+        return self.creator.nickname if self.creator else None
+
 
 class OrderEvent(Base):
     """Append-only audit trail; per-worker activity counts aggregate from here."""
@@ -165,3 +252,121 @@ class OrderEvent(Base):
     __table_args__ = (
         Index("ix_order_events_actor_type", "actor_id", "event_type"),
     )
+
+
+class TrafficMinute(Base):
+    """
+    Request counts per minute, one row per worker process. Each worker keeps
+    its own counters in memory and flushes deltas every few seconds; readers
+    sum across workers, so the numbers are whole-service totals that survive
+    restarts. See api.monitoring.
+    """
+
+    __tablename__ = "traffic_minutes"
+
+    minute: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    worker: Mapped[str] = mapped_column(String(64), primary_key=True)
+    requests: Mapped[int] = mapped_column(Integer, default=0)
+    # 429s from the rate limiter and 409s from the order cooldown are the two
+    # signals worth watching on their own; the rest fold into 4xx / 5xx.
+    throttled: Mapped[int] = mapped_column(Integer, default=0)
+    cooldown: Mapped[int] = mapped_column(Integer, default=0)
+    client_errors: Mapped[int] = mapped_column(Integer, default=0)
+    server_errors: Mapped[int] = mapped_column(Integer, default=0)
+    # Summed, so an average is latency_ms / requests.
+    latency_ms: Mapped[int] = mapped_column(BigInteger, default=0)
+
+
+class IntegrationToken(Base):
+    """
+    OAuth tokens for a third-party API (one row per provider). Pathao's access
+    token lives for days, so it is issued once and shared by every worker
+    process rather than fetched per request.
+    """
+
+    __tablename__ = "integration_tokens"
+
+    provider: Mapped[str] = mapped_column(String(40), primary_key=True)
+    access_token: Mapped[str] = mapped_column(Text)
+    refresh_token: Mapped[str | None] = mapped_column(Text)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class Product(Base):
+    """
+    A sellable product. The storefront sells exactly one at a time: the row
+    with is_active set is what the landing page shows and — more importantly —
+    what order creation prices against, so a client can never dictate a total.
+
+    Orders keep their own product_name / unit_price / total_amount columns, so
+    editing or deleting a product never rewrites what a past order recorded.
+    """
+
+    __tablename__ = "products"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    title: Mapped[str] = mapped_column(String(255))
+    subtitle: Mapped[str] = mapped_column(Text, default="")
+    # Path relative to settings.media_root, e.g. "products/a1b2c3.jpg". Served
+    # at /media/<image_path>; null until an image is uploaded.
+    image_path: Mapped[str | None] = mapped_column(String(255))
+    # What the storefront's quantity field starts at; the customer may change
+    # it, and the order records whatever they chose.
+    default_quantity: Mapped[int] = mapped_column(Integer, default=1)
+    # Unit price in whole taka.
+    unit_price: Mapped[int] = mapped_column(Integer)
+    # Mirrors PRODUCT.item_id in frontend/src/lib/tracking.ts and the Meta CAPI
+    # content id, so browser-side and server-side events agree on one id.
+    sku: Mapped[str] = mapped_column(String(64))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # "Only one may be active" enforced by the database rather than by
+        # application code, so a concurrent activate cannot leave two winners.
+        # A partial index constrains only the rows where is_active is true.
+        Index(
+            "uq_products_single_active",
+            "is_active",
+            unique=True,
+            postgresql_where=text("is_active"),
+        ),
+    )
+
+
+class OrderItem(Base):
+    """One product line on an order.
+
+    The order keeps its own product_name / unit_price / total_amount columns:
+    those are the summary the storefront, the courier and the sticker read, and
+    a snapshot that must not move when a product is later edited. These rows are
+    the detail behind that summary, so one order can hold several products and
+    per-product figures stay reportable.
+    """
+
+    __tablename__ = "order_items"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    order_id: Mapped[int] = mapped_column(
+        ForeignKey("orders.id", ondelete="CASCADE"), index=True
+    )
+    # Goes null if the catalogue row is deleted. The name and price below are
+    # the snapshot, so the line itself survives intact.
+    product_id: Mapped[int | None] = mapped_column(
+        ForeignKey("products.id", ondelete="SET NULL")
+    )
+    product_name: Mapped[str] = mapped_column(String(255))
+    unit_price: Mapped[int] = mapped_column(Integer)
+    quantity: Mapped[int] = mapped_column(Integer, default=1)
+
+    @property
+    def line_total(self) -> int:
+        return self.unit_price * self.quantity

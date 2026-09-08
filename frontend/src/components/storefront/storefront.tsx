@@ -1,9 +1,28 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import { createOrder } from "@/lib/api";
+import {
+  bengaliNumber,
+  OrderSuccess,
+} from "@/components/storefront/order-success";
+import { ApiError } from "@/lib/http";
+import { cleanPhoneInput, toBdMobile } from "@/lib/phone";
+import {
+  forgetLastOrder,
+  onLastOrderChange,
+  readLastOrder,
+  rememberOrder,
+  type LastOrder,
+} from "@/lib/last-order";
+import {
+  productImage,
+  trackedItem,
+  type StorefrontProduct,
+} from "@/lib/products";
+import { createOrder } from "@/lib/storefront-api";
+import { useOrderDraft } from "@/lib/use-order-draft";
 import {
   normalisePhone,
   trackAddToCart,
@@ -13,16 +32,50 @@ import {
   trackViewItem,
 } from "@/lib/tracking";
 
-export default function Home() {
-  const [submitted, setSubmitted] = useState(false);
+/**
+ * The storefront. The product it sells is passed in from the server component
+ * that wraps it, so the price is in the HTML from the first byte rather than
+ * arriving after a client fetch.
+ */
+export function Storefront({ product }: { product: StorefrontProduct }) {
+  // The confirmed order, if any: set on submit, or restored from this device
+  // on a return visit. `fresh` is only true right after submitting.
+  const [lastOrder, setLastOrder] = useState<LastOrder | null>(null);
+  const [fresh, setFresh] = useState(false);
+  const orderSectionRef = useRef<HTMLElement>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState(false);
+  const [submitError, setSubmitError] = useState<
+    "cooldown" | "throttled" | "failed" | "phone" | null
+  >(null);
+  const [phoneValue, setPhoneValue] = useState("");
   const orderTableRef = useRef<HTMLElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
   const checkoutStarted = useRef(false);
+  // Keeps a half-filled form as a lead even if this visitor never orders.
+  const draft = useOrderDraft(formRef);
+
+  // Everything the analytics events describe comes from the product actually
+  // on sale, so editing it in the admin can never leave GA4 or Meta reporting
+  // the old name or price.
+  const items = useMemo(() => [trackedItem(product)], [product]);
+  // How many the order form places. The product decides the default; free
+  // delivery means the total is simply the line total.
+  const quantity = Math.max(1, product.defaultQuantity);
+  const money = `${bengaliNumber(product.unitPrice * quantity)}.০০৳`;
 
   // view_item: the storefront (single product page) was shown.
   useEffect(() => {
-    trackViewItem();
+    trackViewItem(items);
+  }, [items]);
+
+  // Back within 24h of ordering: show the confirmation, not a form that would
+  // only refuse the same number. Also follow another tab that just ordered.
+  useEffect(() => {
+    setLastOrder(readLastOrder());
+    return onLastOrderChange((order) => {
+      setLastOrder(order);
+      setFresh(false);
+    });
   }, []);
 
   // view_cart: the "Your order" table scrolled into view, once per load.
@@ -32,7 +85,7 @@ export default function Home() {
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((entry) => entry.isIntersecting)) {
-          trackViewCart();
+          trackViewCart(items);
           observer.disconnect();
         }
       },
@@ -40,13 +93,13 @@ export default function Home() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, []);
+  }, [items]);
 
   // begin_checkout: the user started filling the order form, once per load.
   function handleFormFocus() {
     if (checkoutStarted.current) return;
     checkoutStarted.current = true;
-    trackBeginCheckout();
+    trackBeginCheckout(items);
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -55,19 +108,40 @@ export default function Home() {
 
     const form = new FormData(event.currentTarget);
     const customerName = String(form.get("name") ?? "").trim();
-    const phone = String(form.get("phone") ?? "").trim();
     const address = String(form.get("address") ?? "").trim();
+    // The courier only accepts 01XXXXXXXXX, so the number is checked here
+    // and sent in that exact form.
+    const phone = toBdMobile(String(form.get("phone") ?? ""));
+    if (!phone) {
+      setSubmitError("phone");
+      event.currentTarget.phone?.focus?.();
+      return;
+    }
     setSubmitting(true);
-    setSubmitError(false);
+    setSubmitError(null);
     try {
       const order = await createOrder({
         customerName,
         phone,
         address,
-        quantity: 1,
+        quantity,
+        // Promotes this visit's autosaved row instead of creating a second one.
+        draftKey: draft.getDraftKey(),
       });
-      setSubmitted(true);
+      draft.stop();
+      const placed: LastOrder = {
+        orderNo: order.orderNo,
+        name: customerName,
+        phone,
+        address,
+        at: Date.now(),
+      };
+      rememberOrder(placed);
+      setLastOrder(placed);
+      setFresh(true);
+      orderSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
       trackPurchase({
+        items,
         transactionId: order.orderNo,
         user: {
           first_name: customerName.split(/\s+/)[0] ?? "",
@@ -76,8 +150,19 @@ export default function Home() {
           country: "BD",
         },
       });
-    } catch {
-      setSubmitError(true);
+    } catch (err) {
+      // 409: this number already ordered within the cooldown window.
+      // 429: too many attempts from this connection right now.
+      const status = err instanceof ApiError ? err.status : 0;
+      setSubmitError(
+        status === 409
+          ? "cooldown"
+          : status === 429
+            ? "throttled"
+            : status === 422
+              ? "phone"
+              : "failed"
+      );
     } finally {
       setSubmitting(false);
     }
@@ -156,16 +241,33 @@ export default function Home() {
         </section>
       </div>
 
-      <section className="order-section" id="order">
-        {/* <p className="eyebrow">অর্ডার করতে নিচের ফর্মটি ফিলআপ করুন</p> */}
-        <h2 className="eyebrow">অর্ডার করতে নিচের ফর্মটি ফিলআপ করুন</h2>
-        {submitted ? (
-          <div className="success">
-            <strong>আপনার অর্ডারটি গ্রহণ করা হয়েছে!</strong>
-            <span>আমাদের প্রতিনিধি খুব শিগগিরই আপনার সাথে যোগাযোগ করবেন।</span>
-          </div>
+      <section className="order-section" id="order" ref={orderSectionRef}>
+        {lastOrder ? (
+          <OrderSuccess
+            order={lastOrder}
+            product={product}
+            fresh={fresh}
+            onOrderAnother={() => {
+              // Ordering for someone else: the same number is still refused
+              // by the API's cooldown, so this only helps a different one.
+              forgetLastOrder();
+              setLastOrder(null);
+              setFresh(false);
+              setSubmitError(null);
+              draft.restart();
+            }}
+          />
         ) : (
-          <form onSubmit={handleSubmit} onFocusCapture={handleFormFocus}>
+          <>
+        <h2 className="eyebrow">অর্ডার করতে নিচের ফর্মটি ফিলআপ করুন</h2>
+
+          <form
+            ref={formRef}
+            onSubmit={handleSubmit}
+            onFocusCapture={handleFormFocus}
+            onInput={draft.onFormInput}
+            onBlurCapture={draft.onFieldBlur}
+          >
             <label>
               নাম
               <input
@@ -181,10 +283,16 @@ export default function Home() {
                 required
                 name="phone"
                 type="tel"
-                inputMode="tel"
-                minLength={6}
-                maxLength={32}
-                placeholder="আপনার ফোন নাম্বার লিখুন"
+                inputMode="numeric"
+                autoComplete="tel"
+                maxLength={14}
+                value={phoneValue}
+                onChange={(e) => {
+                  setPhoneValue(cleanPhoneInput(e.target.value));
+                  if (submitError === "phone") setSubmitError(null);
+                }}
+                aria-invalid={submitError === "phone" || undefined}
+                placeholder="01XXXXXXXXX"
               />
             </label>
             <label>
@@ -198,7 +306,26 @@ export default function Home() {
                 placeholder="আপনার সম্পূর্ণ ঠিকানা লিখুন"
               />
             </label>
-            {submitError && (
+            {submitError === "phone" && (
+              <p className="form-error">
+                সঠিক মোবাইল নাম্বার দিন — ১১ ডিজিট, 01 দিয়ে শুরু (যেমন
+                01712345678)।
+              </p>
+            )}
+            {submitError === "cooldown" && (
+              <p className="form-error">
+                এই নাম্বার থেকে ইতিমধ্যে একটি অর্ডার করা হয়েছে। আমাদের প্রতিনিধি
+                শিগগিরই আপনার সাথে যোগাযোগ করবেন। নতুন অর্ডারের জন্য ২৪ ঘণ্টা পর
+                আবার চেষ্টা করুন।
+              </p>
+            )}
+            {submitError === "throttled" && (
+              <p className="form-error">
+                একসাথে অনেকবার চেষ্টা করা হয়েছে। অনুগ্রহ করে কয়েক মিনিট পর আবার
+                চেষ্টা করুন।
+              </p>
+            )}
+            {submitError === "failed" && (
               <p className="form-error">
                 দুঃখিত, অর্ডারটি জমা দেওয়া যায়নি। একটু পরে আবার চেষ্টা করুন।
               </p>
@@ -211,6 +338,7 @@ export default function Home() {
               ক্যাশ অন ডেলিভারি · সারা বাংলাদেশে ফ্রি ডেলিভারি
             </small>
           </form>
+          </>
         )}
       </section>
 
@@ -226,21 +354,20 @@ export default function Home() {
           <div>
             <div className="order-product">
               <Image
-                src="/order-item.png"
-                alt="আমাদের স্পেশাল আচার কম্বো"
+                src={productImage(product)}
+                alt={product.title}
                 width={60}
                 height={60}
               />
               <span>
-                ইলিশের আচার ২০০ গ্রাম, গরুর মাংস আচার ২০০ গ্রাম, এবং চেপা শুটকির
-                আচার ২০০ গ্রাম, কম্বো × 1
+                {product.title} × {bengaliNumber(quantity)}
               </span>
             </div>
-            <span>১,৪৯০.০০৳</span>
+            <span>{money}</span>
           </div>
           <div>
             <span>Subtotal</span>
-            <span>১,৪৯০.০০৳</span>
+            <span>{money}</span>
           </div>
           <div>
             <span>Shipping</span>
@@ -248,7 +375,7 @@ export default function Home() {
           </div>
           <div>
             <b>Total</b>
-            <b>১,৪৯০.০০৳</b>
+            <b>{money}</b>
           </div>
         </div>
         <div className="cash-box">

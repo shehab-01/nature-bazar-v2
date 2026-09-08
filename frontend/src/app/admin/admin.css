@@ -44,8 +44,15 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
 
-  --font-sans: ui-sans-serif, system-ui, "Noto Sans Bengali", sans-serif;
-  --font-display: ui-sans-serif, system-ui, "Noto Sans Bengali", sans-serif;
+  /* One shade for the table header and the row it is hovering over, so the
+     hover reads as "this row is under the header's spotlight". */
+  --color-table-header: var(--table-header);
+
+  /* Manrope covers Latin; Bengali falls through, as it has no Manrope glyphs. */
+  --font-sans: var(--font-manrope, ui-sans-serif), system-ui,
+    var(--font-bengali, "Noto Sans Bengali"), sans-serif;
+  --font-display: var(--font-manrope, ui-sans-serif), system-ui,
+    var(--font-bengali, "Noto Sans Bengali"), sans-serif;
 }
 
 :root {
@@ -54,6 +61,7 @@
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);
+  --table-header: oklch(0.93 0 0);
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.145 0 0);
   --primary: oklch(0.205 0 0);
@@ -88,6 +96,8 @@
   --foreground: oklch(0.985 0 0);
   --card: oklch(0.205 0 0);
   --card-foreground: oklch(0.985 0 0);
+  /* Dark mode separates by lifting off the card, not by going darker. */
+  --table-header: oklch(0.3 0 0);
   --popover: oklch(0.205 0 0);
   --popover-foreground: oklch(0.985 0 0);
   --primary: oklch(0.922 0 0);

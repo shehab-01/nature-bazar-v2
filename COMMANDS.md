@@ -47,7 +47,84 @@ Debug browser events on the live site: in the console run
 `localStorage.trackingDebug = "1"` and reload. CAPI results appear in
 `docker compose logs api | grep CAPI`.
 
+## Pathao Courier
+
+Keys live in `.env` (runtime vars, so `docker compose up -d --force-recreate api`
+after changing them — no rebuild):
+
+| Variable | Sandbox value | Live value |
+|---|---|---|
+| `PATHAO_BASE_URL` | `https://courier-api-sandbox.pathao.com` | `https://api-hermes.pathao.com` |
+| `PATHAO_CLIENT_ID` | `7N1aMJQbWm` | merchant.pathao.com → Developer API → Client ID |
+| `PATHAO_CLIENT_SECRET` | `wRcaibZkUdSNz2EI9ZyuXLlNrnAv0TdPUPXMnD39` | same page → Client Secret |
+| `PATHAO_USERNAME` | `test@pathao.com` | your merchant panel login email |
+| `PATHAO_PASSWORD` | `lovePathao` | your merchant panel password |
+| `PATHAO_STORE_ID` | `150833` | from the check below |
+| `PATHAO_UNIT_WEIGHT_KG` | `1` | real weight of one combo, in kg |
+
+Check the keys and find the store id (super admin session cookie needed, so
+easiest in the browser): open `http://localhost:8085/api/system/pathao`. It
+shows `enabled`, whether it is the sandbox, and every store the credentials
+can see with its `store_id`. Copy the right one into `PATHAO_STORE_ID`.
+
+Sending happens from Admin → Orders → Ship: tick rows → **Send to Pathao**.
+The consignment id appears in the Pathao column and links to Pathao's tracking
+page. **Refresh Status** pulls the latest delivery status. Access tokens are
+cached in the `integration_tokens` table and renewed automatically. Logs:
+`docker compose logs api | grep -i pathao`.
+
+## Attack protection
+
+Two layers. The app layer protects the database; only Cloudflare can absorb a
+flood that fills the pipe, so make sure both are on.
+
+**Inside the API (per IP, per 10 minutes — set in `.env`, then
+`docker compose up -d --force-recreate api`):**
+
+| Variable | Default | Guards |
+|---|---|---|
+| `RATE_LIMIT_ORDERS` | 30 | `POST /api/orders` (placing an order) |
+| `RATE_LIMIT_DRAFTS` | 300 | `POST /api/orders/draft` (form autosave) |
+| `RATE_LIMIT_LOGINS` | 20 | `POST /api/auth/google` |
+| `RATE_LIMIT_WINDOW_SECONDS` | 600 | the window for all three |
+| `ORDER_COOLDOWN_HOURS` | 24 | one order per phone number per window |
+
+Limits are deliberately loose: Bangladeshi mobile carriers put thousands of
+customers behind one shared IP (CGNAT), so a tight limit turns a campaign
+spike into lost orders. Counters are per worker (`UVICORN_WORKERS=2`), so the
+effective ceiling is up to 2× the number above. Set a value to `0` to turn
+that limit off.
+
+The client address comes from `CF-Connecting-IP`, which Cloudflare sets and
+clients cannot forge. If the header ever stops arriving (Cloudflare removed),
+the limiter switches itself off rather than lock everyone out, and logs a
+warning once. Blocked addresses show up as:
+
+```bash
+docker compose logs api | grep ratelimit
+```
+
+**At the edge (Cloudflare dashboard → the site):**
+
+1. **Security → WAF → Rate limiting rules** — add one:
+   expression `(http.request.uri.path eq "/api/orders" and http.request.method eq "POST")`,
+   10 requests per 10 seconds per IP, action *Block* for 10 seconds.
+   This stops a flood before it reaches the tunnel at all.
+2. **Security → Bots → Bot Fight Mode: On.**
+3. During an incident: **Overview → Under Attack Mode: On** (every visitor
+   gets a 5-second JS challenge; turn it off afterwards).
+
+The origin is only reachable through the tunnel (`8000` and `8085` bind to
+`127.0.0.1`), so attackers cannot bypass Cloudflare by hitting the server's
+IP directly. Keep it that way.
+
 ## Status & logs
+
+Without SSH: **Admin → System** (super admins only) shows API/database health,
+requests per minute across both workers, 429/409/5xx counts, who is currently
+rate-limited, host load/memory/disk, and the last warnings and errors — refreshed
+every 10 s. It also tells you whether Cloudflare's client address is reaching
+the API; if that tile ever turns red, per-IP limiting is off.
 
 ```bash
 docker compose ps
