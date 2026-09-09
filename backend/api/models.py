@@ -449,19 +449,3 @@ class OrderItem(Base):
     @property
     def line_total(self) -> int:
         return self.unit_price * self.quantity
-
-
-class AppSetting(Base):
-    """One super-admin setting, by key. Values are strings; the module that
-    owns a key parses it (see api.workday for "day_end")."""
-
-    __tablename__ = "app_settings"
-
-    key: Mapped[str] = mapped_column(String(64), primary_key=True)
-    value: Mapped[str] = mapped_column(Text)
-    updated_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
-    )
-    updated_by_id: Mapped[int | None] = mapped_column(
-        BigInteger, ForeignKey("users.id", ondelete="SET NULL")
-    )

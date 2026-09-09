@@ -84,16 +84,6 @@ Resend button (or `POST /api/system/capi/failed/resend`) retries each once,
 `DELETE /api/system/capi/failed/{id}` drops one. Meta accepts website events up
 to seven days old; older parked rows will keep failing and should be deleted.
 
-## Working day (dashboard & table dates)
-
-A super admin sets when the shop's day ends from Admin → Dashboard → **Day
-ends …** (next to the date picker). Orders that arrive after that hour count
-towards the *next* day on the dashboard and in every order table's date
-filter — with "Day ends 22:00", an order at 23:00 on the 9th is the 10th's.
-Midnight (00:00, the default) means plain Dhaka calendar days. The value is
-stored in the `app_settings` table (key `day_end`) and takes effect at once,
-no redeploy. Code: `backend/api/workday.py`, `GET/PUT /api/settings/workday`.
-
 ## Pathao Courier
 
 Keys live in `.env` (runtime vars, so `docker compose up -d --force-recreate api`

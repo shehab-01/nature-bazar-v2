@@ -23,7 +23,7 @@ from api.models import (
 )
 from api.phone import phone_digits, phone_key
 from api.ratelimit import client_ip, drafts_limiter, orders_limiter
-from api import catalogue, workday
+from api import catalogue
 from api.services import meta_capi, pathao, pathao_sync
 from api.schemas import (
     BulkOrderResult,
@@ -84,10 +84,27 @@ def _claim_stale_before() -> datetime:
     return datetime.now(timezone.utc) - timedelta(minutes=settings.claim_ttl_minutes)
 
 
+def _day_start(d: date) -> datetime:
+    return datetime.combine(d, time.min, tzinfo=timezone.utc)
 
 
 # The shop's clock. Bangladesh has no daylight saving, so a fixed offset is
 # exact and needs no tz database in the container.
+DHAKA = timezone(timedelta(hours=6), "Asia/Dhaka")
+
+
+def _dhaka_day(d: date) -> tuple[datetime, datetime]:
+    """The instants a Dhaka calendar day starts and ends."""
+    start = datetime.combine(d, time.min, tzinfo=DHAKA)
+    return start, start + timedelta(days=1)
+
+
+def _dhaka_month(d: date) -> tuple[datetime, datetime]:
+    start = datetime(d.year, d.month, 1, tzinfo=DHAKA)
+    end = datetime(d.year + (d.month == 12), d.month % 12 + 1, 1, tzinfo=DHAKA)
+    return start, end
+
+
 async def _get_fresh_order(session: AsyncSession, order_id: int) -> Order:
     """Reload an order (with its assignee) after a write, for the response."""
     order = await session.scalar(
@@ -476,14 +493,10 @@ async def list_orders(
     filters = []
     if status:
         filters.append(Order.status.in_(status))
-    # Dates mean the shop's working days (see api.workday), so an order
-    # placed after the closing hour lists under the next day.
-    if date_from or date_to:
-        day_end = await workday.day_end(session)
-        if date_from:
-            filters.append(Order.created_at >= workday.day_bounds(date_from, day_end)[0])
-        if date_to:
-            filters.append(Order.created_at < workday.day_bounds(date_to, day_end)[1])
+    if date_from:
+        filters.append(Order.created_at >= _day_start(date_from))
+    if date_to:
+        filters.append(Order.created_at < _day_start(date_to) + timedelta(days=1))
     if q:
         q = q.strip()
         order_no = ORDER_NO_RE.match(q)
@@ -700,10 +713,10 @@ def _totals(counts: dict) -> DashboardTotals:
 
 
 def _range(
-    date_from: date | None, date_to: date | None, day_end: time
+    date_from: date | None, date_to: date | None
 ) -> tuple[date, date, datetime, datetime]:
-    """The chosen working days, defaulting to today, checked for sense."""
-    today = workday.today(day_end)
+    """The chosen Dhaka days, defaulting to today, checked for sense."""
+    today = datetime.now(DHAKA).date()
     end_day = date_to or today
     start_day = date_from or end_day
     if end_day > today:
@@ -712,8 +725,8 @@ def _range(
         raise HTTPException(status_code=400, detail="The range ends before it starts")
     if (end_day - start_day).days > 366:
         raise HTTPException(status_code=400, detail="At most a year at a time")
-    start, _ = workday.day_bounds(start_day, day_end)
-    _, end = workday.day_bounds(end_day, day_end)
+    start, _ = _dhaka_day(start_day)
+    _, end = _dhaka_day(end_day)
     return start_day, end_day, start, end
 
 
@@ -727,18 +740,14 @@ async def dashboard(
     """The figures the admin home page leads with: the chosen days in detail
     (today, by default), and the month the range ends in.
 
-    Days are the shop's working days (api.workday), not UTC's: an order at
-    02:00 in Dhaka belongs to that morning, and one placed after the closing
-    hour the super admin set belongs to the next day. Every figure is by the order's
+    Days are the shop's days, not UTC's: an order at 02:00 in Dhaka belongs to
+    that morning, not to the evening before. Every figure is by the order's
     creation date and its status now, so a day's numbers keep moving as its
     orders are worked — which is what a target board wants to show.
     """
-    day_end = await workday.day_end(session)
-    start_day, end_day, start, end = _range(date_from, date_to, day_end)
-    month_start, month_end = workday.month_bounds(end_day, day_end)
-    last_month_start, _ = workday.month_bounds(
-        (end_day.replace(day=1) - timedelta(days=1)), day_end
-    )
+    start_day, end_day, start, end = _range(date_from, date_to)
+    month_start, month_end = _dhaka_month(end_day)
+    last_month_start, _ = _dhaka_month((month_start - timedelta(days=1)).date())
 
     period = await _counts(session, start, end)
     this_month = await _counts(session, month_start, month_end)
@@ -772,8 +781,6 @@ async def dashboard(
     return DashboardOut(
         date_from=start_day,
         date_to=end_day,
-        today=workday.today(day_end),
-        day_end=workday.format_day_end(day_end),
         month=f"{end_day.year:04d}-{end_day.month:02d}",
         this_month=_totals(this_month),
         last_month=_totals(last_month),
@@ -802,7 +809,7 @@ async def dashboard_activity(
 ) -> list[ActivityOut]:
     """The orders one staff member confirmed over the chosen days, newest
     first: the list behind their number on the performers card."""
-    _, _, start, end = _range(date_from, date_to, await workday.day_end(session))
+    _, _, start, end = _range(date_from, date_to)
     rows = await session.execute(
         select(OrderEvent, Order.customer_name)
         .join(Order, Order.id == OrderEvent.order_id)

@@ -420,10 +420,6 @@ export type Performer = {
 export type Dashboard = {
   date_from: string;
   date_to: string;
-  /** The current working day — after the closing hour, tomorrow's date. */
-  today: string;
-  /** "22:00": when the working day ends; "00:00" for calendar days. */
-  day_end: string;
   month: string;
   this_month: DashboardTotals;
   last_month: DashboardTotals;
@@ -434,22 +430,6 @@ export type Dashboard = {
 /** The home page's figures for a range of Dhaka days and the month it ends in. */
 export async function getDashboard(from: string, to: string): Promise<Dashboard> {
   return request<Dashboard>(`/api/orders/dashboard?from=${from}&to=${to}`);
-}
-
-/** The shop's working day: when it ends, and which day it is right now. */
-export type Workday = { day_end: string; today: string };
-
-export async function getWorkday(): Promise<Workday> {
-  return request<Workday>("/api/settings/workday");
-}
-
-/** Super admin only. `dayEnd` is "HH:MM" in Dhaka time; "00:00" means
- * plain calendar days. */
-export async function setWorkday(dayEnd: string): Promise<Workday> {
-  return request<Workday>("/api/settings/workday", {
-    method: "PUT",
-    body: JSON.stringify({ day_end: dayEnd }),
-  });
 }
 
 export type Activity = {

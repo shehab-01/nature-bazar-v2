@@ -9,7 +9,6 @@ import {
   ChevronDown,
   Clock3,
   Minus,
-  Settings2,
   Trophy,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -35,25 +34,23 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useAuth } from "@/components/admin/auth-context";
 import {
   getDashboard,
   getDashboardActivity,
-  getWorkday,
-  setWorkday,
   type Activity,
   type Dashboard,
   type Performer,
-  type Workday,
 } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 // --- Dates, the shop's way ---------------------------------------------------
-// Everything below works in YYYY-MM-DD strings that mean the shop's working
-// days: Dhaka dates, rolled to the next one after the closing hour the super
-// admin set. "Today" therefore comes from the API, never from the clock here.
-// Arithmetic is done in UTC on purpose so a viewer's own timezone never shifts
+// Everything below works in YYYY-MM-DD strings that mean Dhaka calendar days;
+// arithmetic is done in UTC on purpose so a viewer's own timezone never shifts
 // a day boundary.
+
+function dhakaToday(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Dhaka" });
+}
 
 function addDays(iso: string, n: number): string {
   const d = new Date(`${iso}T00:00:00Z`);
@@ -126,43 +123,15 @@ function rangeLabel(r: Range): string {
  * says otherwise), the month's shape as a line, and who confirmed the most.
  */
 export default function AdminDashboardPage() {
-  const { user } = useAuth();
-  const [workday, setWorkdayState] = React.useState<Workday | null>(null);
-  const [range, setRange] = React.useState<Range | null>(null);
+  const today = dhakaToday();
+  const [range, setRange] = React.useState<Range>(() =>
+    presetRange("today", today)
+  );
   const [data, setData] = React.useState<Dashboard | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [performer, setPerformer] = React.useState<Performer | null>(null);
 
-  // Which day is "today" is the shop's call, so the range waits for it.
   React.useEffect(() => {
-    let cancelled = false;
-    getWorkday()
-      .then((w) => {
-        if (cancelled) return;
-        setWorkdayState(w);
-        setRange(presetRange("today", w.today));
-      })
-      .catch((err) => {
-        if (!cancelled) {
-          setError(err instanceof Error ? err.message : "Failed to load");
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // The closing hour changed: "today" may have moved with it, so a preset
-  // range is recomputed while a custom one is left exactly as picked.
-  const applyWorkday = React.useCallback((w: Workday) => {
-    setWorkdayState(w);
-    setRange((r) =>
-      r && r.preset !== "custom" ? presetRange(r.preset, w.today) : r
-    );
-  }, []);
-
-  React.useEffect(() => {
-    if (!range) return;
     let cancelled = false;
     setData(null);
     getDashboard(range.from, range.to)
@@ -182,7 +151,6 @@ export default function AdminDashboardPage() {
     };
   }, [range]);
 
-  const today = workday?.today ?? "";
   const m = data?.this_month;
   const p = data?.last_month;
   const d = data?.period;
@@ -194,9 +162,7 @@ export default function AdminDashboardPage() {
         <h1 className="text-3xl font-bold tracking-tight text-[#07582d] dark:text-[#7ed3a0]">
           Nature Bazar — Ecotine
         </h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {range ? fullDate(range.to) : "\u00a0"}
-        </p>
+        <p className="mt-1 text-sm text-muted-foreground">{fullDate(range.to)}</p>
       </div>
 
       {error && (
@@ -232,22 +198,9 @@ export default function AdminDashboardPage() {
         <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3">
           <div>
             <CardTitle>Daily Database</CardTitle>
-            <CardDescription className="mt-1">
-              {range ? rangeLabel(range) : "Loading…"}
-            </CardDescription>
+            <CardDescription className="mt-1">{rangeLabel(range)}</CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {workday && (
-              <WorkdayControl
-                workday={workday}
-                canEdit={user.role === "super_admin"}
-                onSaved={applyWorkday}
-              />
-            )}
-            {range && (
-              <RangePicker value={range} today={today} onChange={setRange} />
-            )}
-          </div>
+          <RangePicker value={range} today={today} onChange={setRange} />
         </CardHeader>
         <CardContent className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <section>
@@ -319,13 +272,11 @@ export default function AdminDashboardPage() {
         </CardContent>
       </Card>
 
-      {range && (
-        <ActivityDialog
-          performer={performer}
-          range={range}
-          onClose={() => setPerformer(null)}
-        />
-      )}
+      <ActivityDialog
+        performer={performer}
+        range={range}
+        onClose={() => setPerformer(null)}
+      />
     </div>
   );
 }
@@ -451,98 +402,6 @@ function RangePicker({
             }}
           >
             Apply
-          </Button>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-// --- Working day -------------------------------------------------------------
-
-/** "Day ends 22:00" — what the tables and this page count as one day. A
- * super admin can change it here; staff just see it. */
-function WorkdayControl({
-  workday,
-  canEdit,
-  onSaved,
-}: {
-  workday: Workday;
-  canEdit: boolean;
-  onSaved: (w: Workday) => void;
-}) {
-  const [open, setOpen] = React.useState(false);
-  const [value, setValue] = React.useState(workday.day_end);
-  const [saving, setSaving] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    if (open) {
-      setValue(workday.day_end);
-      setError(null);
-    }
-  }, [open, workday.day_end]);
-
-  const calendarDays = workday.day_end === "00:00";
-  const label = calendarDays ? "Day ends midnight" : `Day ends ${workday.day_end}`;
-
-  if (!canEdit) {
-    return (
-      <span
-        className="inline-flex h-9 items-center gap-2 rounded-md border border-dashed px-3 text-sm text-muted-foreground"
-        title="Orders after this hour count towards the next day"
-      >
-        <Clock3 className="size-4" />
-        {label}
-      </span>
-    );
-  }
-
-  async function save() {
-    setSaving(true);
-    setError(null);
-    try {
-      onSaved(await setWorkday(value));
-      setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not save");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" className="gap-2 border-dashed">
-          <Settings2 className="size-4" />
-          {label}
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent align="end" className="w-72 p-3">
-        <div className="grid gap-2">
-          <Label htmlFor="dash-day-end" className="text-sm font-medium">
-            Working day ends at
-          </Label>
-          <Input
-            id="dash-day-end"
-            type="time"
-            step={60}
-            value={value}
-            onChange={(e) => e.target.value && setValue(e.target.value)}
-          />
-          <p className="text-xs text-muted-foreground">
-            Orders that arrive after this hour count towards the next day, here
-            and in every order table&apos;s date filter. Midnight (00:00) means
-            plain calendar days.
-          </p>
-          {error && <p className="text-xs text-destructive">{error}</p>}
-          <Button
-            size="sm"
-            disabled={saving || value === workday.day_end}
-            onClick={save}
-          >
-            {saving ? "Saving…" : "Save"}
           </Button>
         </div>
       </PopoverContent>
