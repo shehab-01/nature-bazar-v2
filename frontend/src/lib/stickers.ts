@@ -3,7 +3,7 @@ import qrcode from "qrcode-generator";
 import type { Order, OrderItem } from "@/lib/orders";
 
 /**
- * Shipping stickers: one A4 invoice per order, rendered in a print window.
+ * Shipping stickers: one invoice per order, rendered in a print window.
  *
  * The layout is a hand-port of backend/template/Nature_Bazar_Ticket_Template.pptx
  * — the .pptx is the design source, not a runtime template. Nothing is
@@ -13,7 +13,7 @@ import type { Order, OrderItem } from "@/lib/orders";
  * PDF" for anyone who wants a file.
  */
 
-/** "label" is the 100 × 150 mm courier sticker; "a4" the full invoice sheet. */
+/** "label" is the 3 × 4 in (76 × 102 mm) courier sticker; "a4" the full invoice sheet. */
 export type StickerSize = "label" | "a4";
 
 const SHOP_NAME = "Nature Bazar";
@@ -109,60 +109,22 @@ function lines(order: Order): OrderItem[] {
 }
 
 /**
- * The 100 × 150 mm courier label — the default, and what actually goes on a
- * parcel.
- *
- * Built for a 203 dpi thermal head rather than scaled down from the A4 sheet:
- * at that width an A4 page prints at ~48%, which drops body text to ~6pt and
- * turns Bengali conjuncts to mush. Everything here is pure black on white —
- * a thermal printer has no colour, and it renders the invoice's green fills
- * as dithered grey — and the emphasis comes from weight and rules instead of
- * large solid areas, which smear on a hot head.
+ * One invoice, at either size. The 3 × 4 in label is the same document as the
+ * A4 sheet — the .pptx structure, top to bottom — rather than a different
+ * layout, so a courier and a customer read the same thing. It is built for a
+ * 203 dpi thermal head rather than scaled down from A4 (which would drop the
+ * body to ~5pt and turn Bengali conjuncts to mush): pure black on white,
+ * nothing thinner than 0.3mm, no grey fills, and the totals pinned to the
+ * foot so the due amount lands in the same spot on every parcel.
  */
-function labelHtml(order: Order, date: string): string {
-  const parcelId = order.pathaoConsignmentId || "N/A";
-  const rows = lines(order);
-  const units = rows.reduce((sum, row) => sum + row.quantity, 0);
-  const items = `${units} item${units === 1 ? "" : "s"}`;
-
-  return `
-<article class="page label">
-  <header class="l-head">
-    <span class="l-shop">${SHOP_NAME.toUpperCase()}</span>
-    <span class="l-no">${escapeHtml(order.orderNo)}</span>
-  </header>
-
-  <div class="l-sub">${escapeHtml(date)} &nbsp;·&nbsp; ${COURIER} &nbsp;·&nbsp; ${items}</div>
-
-  <section class="l-to">
-    <div class="l-k">Deliver to</div>
-    <div class="l-name">${escapeHtml(order.customerName || "Customer")}</div>
-    <div class="l-phone">${escapeHtml(order.phone)}</div>
-    <div class="l-addr">${escapeHtml(order.address)}</div>
-  </section>
-
-  <section class="l-pay">
-    ${qrSvg(order.orderNo)}
-    <div class="l-cod">
-      <div class="l-k">Collect (COD)</div>
-      <div class="l-amt">৳ ${order.total}</div>
-      <div class="l-parcel">Parcel ${escapeHtml(parcelId)}</div>
-    </div>
-  </section>
-
-  <footer class="l-foot">${rows
-    .map((row) => `${escapeHtml(row.productName)} &times;${row.quantity}`)
-    .join("<br>")}</footer>
-</article>`;
-}
-
-function invoiceHtml(order: Order, date: string): string {
+function invoiceHtml(order: Order, date: string, size: StickerSize): string {
+  const label = size === "label";
   const rows = lines(order);
   const subTotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
   const parcelId = order.pathaoConsignmentId || "N/A";
 
   return `
-<article class="page">
+<article class="page${label ? " label" : ""}">
   <header class="head">
     <h1>${SHOP_NAME}</h1>
     <div class="meta">
@@ -194,6 +156,7 @@ function invoiceHtml(order: Order, date: string): string {
     </div>
   </section>
 
+  <div class="items">
   <table>
     <thead>
       <tr><th>Product</th><th class="num">Qty</th><th class="num">Price</th><th class="num">Total</th></tr>
@@ -202,7 +165,7 @@ function invoiceHtml(order: Order, date: string): string {
       ${rows
         .map(
           (row) => `<tr>
-        <td>${escapeHtml(row.productName)}</td>
+        <td><span class="pn">${escapeHtml(row.productName)}</span></td>
         <td class="num">${row.quantity}</td>
         <td class="num">${row.unitPrice}</td>
         <td class="num">${row.lineTotal}</td>
@@ -211,6 +174,7 @@ function invoiceHtml(order: Order, date: string): string {
         .join("\n      ")}
     </tbody>
   </table>
+  </div>
 
   <section class="totals">
     <div class="t-row"><span>Sub Total</span><b>${subTotal}</b></div>
@@ -218,7 +182,7 @@ function invoiceHtml(order: Order, date: string): string {
     <div class="due"><span>Due Amount</span><b>${order.total}</b></div>
   </section>
 
-  <footer class="foot">Thank you for shopping with ${SHOP_NAME} &nbsp;•&nbsp; Cash on delivery</footer>
+${label ? "" : `  <footer class="foot">Thank you for shopping with ${SHOP_NAME} &nbsp;•&nbsp; Cash on delivery</footer>`}
 </article>`;
 }
 
@@ -264,7 +228,7 @@ export function buildStickerDocument(
 <style>
 ${fontFaceCss()}
 
-  @page { size: ${size === "a4" ? "A4" : "100mm 150mm"}; margin: 0; }
+  @page { size: ${size === "a4" ? "A4" : "3in 4in"}; margin: 0; }
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; }
   body {
@@ -285,44 +249,7 @@ ${fontFaceCss()}
   }
   .page:last-child { page-break-after: auto; break-after: auto; }
   .page:not(.label) { width: 210mm; height: 297mm; padding: 18mm 16mm; }
-
-  /* --- 100 x 150 mm thermal label --- */
-  .label {
-    width: 100mm; height: 150mm; padding: 5mm;
-    color: #000;
-    /* A 203 dpi head cannot resolve hairlines, so nothing here is thinner
-       than 0.3mm and no rule relies on a grey. */
-    font-size: 10pt; line-height: 1.3;
-  }
-  .l-head {
-    display: flex; justify-content: space-between; align-items: baseline; gap: 3mm;
-    border-bottom: 0.6mm solid #000; padding-bottom: 1.5mm;
-  }
-  .l-shop { font-size: 13pt; font-weight: 800; letter-spacing: 0.04em; }
-  .l-no { font-size: 12pt; font-weight: 800; font-variant-numeric: tabular-nums; }
-  .l-sub { margin-top: 1.5mm; font-size: 8.5pt; font-weight: 600; }
-  .l-k { font-size: 7.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; }
-  /* Absorbs the label's slack, so a one-line address does not leave a hole
-     above the total — and the QR and COD land in the same spot on every
-     parcel however long the address runs. */
-  .l-to { flex: 1; margin-top: 3.5mm; border-bottom: 0.3mm solid #000; padding-bottom: 3mm; }
-  .l-name { font-size: 15pt; font-weight: 800; line-height: 1.2; margin-top: 1mm; }
-  /* The two fields a rider actually reads off the parcel. */
-  .l-phone { font-size: 19pt; font-weight: 800; letter-spacing: 0.02em; font-variant-numeric: tabular-nums; line-height: 1.2; }
-  .l-addr { font-size: 11pt; font-weight: 600; line-height: 1.35; margin-top: 1.5mm; }
-  .l-pay { display: flex; align-items: center; gap: 4mm; padding: 3.5mm 0; }
-  /* 30mm at 203 dpi is 240 dots across 29 modules — 8 dots a module, well
-     clear of the 4-dot floor where scanning starts to fail. */
-  .label .qr { width: 30mm; height: 30mm; flex: none; }
-  .l-cod { min-width: 0; }
-  .l-amt { font-size: 22pt; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
-  .l-parcel { font-size: 8.5pt; font-weight: 600; margin-top: 1mm; word-break: break-all; }
-  .l-foot {
-    border-top: 0.3mm solid #000; padding-top: 2mm;
-    font-size: 8.5pt; line-height: 1.35;
-    /* A long Bengali combo name must not push the COD block off the label. */
-    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-  }
+  .items { min-height: 0; }
 
   .ic { width: 1em; height: 1em; flex: none; color: #1B4332; }
   .mono { font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
@@ -376,6 +303,57 @@ ${fontFaceCss()}
      sheet — an invoice this short left a hand's width of blank in between. */
   .foot { margin-top: 10mm; text-align: center; font-size: 9.5pt; color: #6B7280; }
 
+
+  /* --- 3 x 4 in thermal label: the same invoice, black only, tightened --- */
+  .label { width: 3in; height: 4in; padding: 4mm; color: #000; }
+  .label .ic, .label .k, .label .t-row span, .label .qr-label { color: #000; }
+  .label .head { gap: 3mm; align-items: flex-start; }
+  .label .head h1 { font-size: 13pt; color: #000; white-space: nowrap; }
+  .label .meta { font-size: 7.5pt; gap: 0.5mm; white-space: nowrap; }
+  .label .meta .k { margin-right: 1mm; }
+
+  .label .party { margin-top: 2mm; gap: 3mm; }
+  .label .who { gap: 1mm; min-width: 0; }
+  .label .line { gap: 1.5mm; font-size: 8pt; }
+  .label .line .k { font-size: 8pt; }
+  /* The two fields a rider actually reads off the parcel. */
+  .label .line .lg { font-size: 11pt; }
+  .label .code { gap: 0; flex: none; }
+  /* 18mm at 203 dpi is 144 dots across 29 modules — 5 dots a module,
+     above the 4-dot floor where scanning starts to fail. */
+  .label .qr { width: 18mm; height: 18mm; }
+  /* The header's IV No is a centimetre above; the caption only cost rows. */
+  .label .qr-label { display: none; }
+
+  .label .ship { flex-direction: column; gap: 1mm; margin-top: 2mm; }
+  .label .ship .field + .field { flex: none; display: flex; align-items: baseline; gap: 2mm; }
+  .label .ship .k { font-size: 7pt; gap: 1.5mm; }
+  .label .ship .v { margin-top: 0.5mm; font-size: 8.5pt; line-height: 1.3; }
+  .label .ship .field + .field .v { margin-top: 0; }
+
+  /* Absorbs the label's slack and hides an overrun, so a long order never
+     pushes the totals off the sheet — the due amount matters more than a
+     fourth product line. */
+  .label .items { flex: 1; overflow: hidden; margin-top: 2mm; }
+  .label table { margin-top: 0; font-size: 7.5pt; }
+  .label thead th {
+    background: none; color: #000; font-size: 6.5pt; letter-spacing: 0.06em;
+    padding: 1mm 1.5mm; border-bottom: 0.3mm solid #000;
+  }
+  .label tbody td { padding: 1.2mm 1.5mm; line-height: 1.3; border-bottom-color: #000; }
+  /* Bounds a row: a long Bengali combo name gets three lines, not six, so
+     a second product still makes it onto the sheet. */
+  .label .pn { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+
+  .label .totals { margin-top: 1.5mm; width: 100%; }
+  .label .t-row { padding: 0.5mm 1.5mm; font-size: 8pt; }
+  .label .due {
+    margin-top: 0.8mm; padding: 1mm 1.5mm; border-radius: 0;
+    background: none; color: #000; border-top: 0.5mm solid #000;
+  }
+  .label .due span { font-size: 9pt; font-weight: 700; }
+  .label .due b { font-size: 13pt; }
+
   @media screen {
     body { background: #e5e5e5; padding: 8mm 0; }
     .page { margin: 0 auto 8mm; box-shadow: 0 2px 12px rgba(0,0,0,0.18); }
@@ -385,8 +363,7 @@ ${fontFaceCss()}
 <body>
 ${orders
   .map((order) =>
-    size === "a4" ? invoiceHtml(order, date) : labelHtml(order, date)
-  )
+    invoiceHtml(order, date, size))
   .join("\n")}
 <script>
 (function () {

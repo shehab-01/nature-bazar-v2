@@ -202,7 +202,7 @@ export function OrderBulkActions({
               <ActionButton
                 icon={Package}
                 label="Print stickers"
-                hint={`${rows.length} × 100×150mm`}
+                hint={`${rows.length} × 3×4in`}
                 busy={busy === "print"}
                 disabled={busy !== null}
                 onClick={() =>
