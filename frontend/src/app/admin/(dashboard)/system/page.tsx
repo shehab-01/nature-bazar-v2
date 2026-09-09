@@ -35,7 +35,11 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { getSystemOverview, type SystemOverview } from "@/lib/api";
+import {
+  getSystemOverview,
+  resendFailedCapiEvents,
+  type SystemOverview,
+} from "@/lib/api";
 import { ORDER_STATUS_LABELS, type OrderStatus } from "@/lib/orders";
 import { PIXEL_ID } from "@/lib/tracking";
 import { cn } from "@/lib/utils";
@@ -245,6 +249,25 @@ export default function SystemPage() {
     }
   }, []);
 
+  // Parked Conversions API events: one resend attempt each, then reload.
+  const [resending, setResending] = React.useState(false);
+  const [resendNote, setResendNote] = React.useState<string | null>(null);
+  const resend = React.useCallback(async () => {
+    setResending(true);
+    setResendNote(null);
+    try {
+      const r = await resendFailedCapiEvents();
+      setResendNote(
+        `${r.sent} sent, ${r.failed} still failing, ${r.remaining} parked`
+      );
+      await load();
+    } catch (err) {
+      setResendNote(err instanceof Error ? err.message : "Resend failed");
+    } finally {
+      setResending(false);
+    }
+  }, [load]);
+
   React.useEffect(() => {
     if (user.role !== "super_admin") return;
     load();
@@ -353,20 +376,54 @@ export default function SystemPage() {
                       Server CAPI {data.integrations.meta_capi ? "on" : "off"}
                       {data.integrations.meta_test_mode ? " (test)" : ""}
                     </Badge>
+                    {data.integrations.meta_capi_failed > 0 && (
+                      <Badge variant="destructive">
+                        {data.integrations.meta_capi_failed} failed
+                      </Badge>
+                    )}
                   </span>
                 }
                 detail={
-                  !!PIXEL_ID !== data.integrations.meta_pixel
-                    ? "API and web build disagree on META_PIXEL_ID — rebuild web after changing .env"
-                    : data.integrations.meta_pixel && !data.integrations.meta_capi
-                      ? "Server-side events start once META_CAPI_ACCESS_TOKEN is set"
-                      : data.integrations.meta_capi
-                        ? "Browser and server events both sending"
-                        : "No pixel configured"
+                  !!PIXEL_ID !== data.integrations.meta_pixel ? (
+                    "API and web build disagree on META_PIXEL_ID — rebuild web after changing .env"
+                  ) : data.integrations.meta_pixel && !data.integrations.meta_capi ? (
+                    "Server-side events start once META_CAPI_ACCESS_TOKEN is set"
+                  ) : data.integrations.meta_capi_failed > 0 ? (
+                    <span className="flex flex-wrap items-center gap-2">
+                      {data.integrations.meta_capi_failed} server event
+                      {data.integrations.meta_capi_failed === 1 ? "" : "s"} Meta never
+                      accepted (after retries) — parked, not lost.
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-6 px-2 text-xs"
+                        disabled={resending}
+                        onClick={resend}
+                      >
+                        <RefreshCw className={cn("size-3", resending && "animate-spin")} />
+                        Resend
+                      </Button>
+                      {resendNote && <span>{resendNote}</span>}
+                    </span>
+                  ) : data.integrations.meta_capi ? (
+                    `Browser and server events both sending${
+                      data.integrations.meta_test_mode
+                        ? " — to Test Events only: clear META_TEST_EVENT_CODE before going live"
+                        : ""
+                    }${
+                      data.integrations.meta_capi_pending
+                        ? ` · ${data.integrations.meta_capi_pending} in flight`
+                        : ""
+                    }`
+                  ) : (
+                    "No pixel configured"
+                  )
                 }
                 icon={Globe}
                 tone={
-                  !!PIXEL_ID !== data.integrations.meta_pixel
+                  !!PIXEL_ID !== data.integrations.meta_pixel ||
+                  data.integrations.meta_capi_failed > 0 ||
+                  data.integrations.meta_test_mode
                     ? "warning"
                     : PIXEL_ID
                       ? "good"

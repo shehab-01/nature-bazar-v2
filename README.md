@@ -22,6 +22,10 @@ Both ports bind to loopback, so something has to sit in front. Either works:
 
 The header names where the API reads the visitor's real IP for rate limiting. Check it landed in Admin → System → "Client address header". See `COMMANDS.md` → "Attack protection" for details.
 
+## Meta tracking
+
+Every browser Pixel event has a server-side twin with the same event id (Conversions API), so Meta deduplicates the pair and still counts the event when the browser copy is blocked. To verify after a deploy, set `META_TEST_EVENT_CODE` from Events Manager → Test Events, watch each event arrive as a deduplicated browser+server pair (including PageView when the tab is closed right after load), then **clear the code again** — while it is set, live Purchases go to the test tab. Full steps in `COMMANDS.md` → "Meta Pixel & Conversions API".
+
 Useful checks:
 
 ```bash

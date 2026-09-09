@@ -640,6 +640,10 @@ export type SystemOverview = {
     meta_pixel: boolean;
     meta_capi: boolean;
     meta_test_mode: boolean;
+    // Conversions API events Meta never accepted, parked for a resend, and
+    // deliveries this worker still has in flight.
+    meta_capi_failed: number;
+    meta_capi_pending: number;
     google_login: boolean;
     secure_cookies: boolean;
   };
@@ -649,6 +653,16 @@ export type SystemOverview = {
 /** Super admin only: everything the System page shows, in one call. */
 export function getSystemOverview(): Promise<SystemOverview> {
   return request<SystemOverview>("/api/system/overview");
+}
+
+export type CapiResendResult = { sent: number; failed: number; remaining: number };
+
+/** Super admin only: try the parked Conversions API events once more. */
+export function resendFailedCapiEvents(): Promise<CapiResendResult> {
+  return request<CapiResendResult>("/api/system/capi/failed/resend", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
 }
 
 // --- Products ---------------------------------------------------------------

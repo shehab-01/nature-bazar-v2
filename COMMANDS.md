@@ -39,13 +39,50 @@ force-recreate of `api` — no rebuild. Frontend build-time vars
 |---|---|---|
 | `META_PIXEL_ID` | web (browser pixel) + api (CAPI) | `docker compose build web && docker compose up -d web` and `docker compose up -d --force-recreate api` |
 | `META_CAPI_ACCESS_TOKEN` | api | `docker compose up -d --force-recreate api` |
-| `META_TEST_EVENT_CODE` | api | same; leave empty in production |
+| `META_TEST_EVENT_CODE` | api | same; **leave empty in production** — while it is set, every server event, live Purchases included, lands in Events Manager → Test Events instead of the real event stream |
+| `RATE_LIMIT_TRACK` | api | same; POST /api/track per IP per minute (default 60) |
 
-Browser events live in `frontend/src/lib/tracking.ts` (product name/price/ids,
-event parameters). Server-side Purchase lives in `backend/api/services/meta_capi.py`.
-Debug browser events on the live site: in the console run
-`localStorage.trackingDebug = "1"` and reload. CAPI results appear in
-`docker compose logs api | grep CAPI`.
+**How it fits together.** Every browser event (PageView, ViewContent,
+AddToCart, InitiateCheckout, Purchase) is also sent from the server through
+the Conversions API with the same event id, so Meta deduplicates the pair and
+still counts the event when the browser copy never arrived (ad blocker, tab
+closed early). The fbq stub is inlined in the document head before anything
+else, so no event is dropped for firing early; `fbevents.js` itself loads on
+the first interaction or after 1.5 s. Purchase uses the order number as the
+shared id and is sent by `POST /api/orders`; the other four mint a UUID in the
+browser and report it to `POST /api/track`. Server sends retry (1 s, 3 s, 9 s)
+and anything Meta still refuses is parked in `meta_capi_failed_events` — Admin
+→ System shows the count with a **Resend** button. Orders typed in by staff
+(Admin → Orders → Manual) send no Purchase: they are not web sales.
+
+Code: browser side `frontend/src/lib/tracking.ts` (events, ids, the
+/api/track post), `frontend/src/lib/pixel-bootstrap.ts` (the inline stub, the
+`_fbp`/`_fbc` cookies, the first PageView), `frontend/src/components/MetaPixel.tsx`
+(deferred SDK load, route-change PageView). Server side
+`backend/api/routers/track.py` and `backend/api/services/meta_capi.py`.
+
+**Verify in Events Manager (after any change to tracking):**
+
+1. Set `META_TEST_EVENT_CODE` to the code shown under Events Manager → your
+   pixel → **Test Events**, then `docker compose up -d --force-recreate api`.
+2. Open the storefront in a private window. In the Test Events tab each event
+   must appear **twice — Browser and Server — and be marked "Deduplicated"**;
+   the two rows share the event id. Check PageView, ViewContent (once per
+   size), AddToCart (one pair per tap), InitiateCheckout (on first form focus)
+   and Purchase (order number as id).
+3. **Close the tab immediately after load.** The PageView pair must still
+   arrive: the server copy goes out via keepalive before hydration.
+4. In the browser console, `localStorage.trackingDebug = "1"` and reload
+   prints every fbq call and every /api/track post with its id. On the server
+   `docker compose logs api | grep CAPI` shows each send, retry and rejection.
+5. **Afterwards clear `META_TEST_EVENT_CODE`** and force-recreate `api`
+   again. The System page shows "(test)" on the CAPI badge and a warning tone
+   while it is set, because live Purchases are going to the test tab.
+
+Parked events: `GET /api/system/capi/failed` lists them, the System page's
+Resend button (or `POST /api/system/capi/failed/resend`) retries each once,
+`DELETE /api/system/capi/failed/{id}` drops one. Meta accepts website events up
+to seven days old; older parked rows will keep failing and should be deleted.
 
 ## Pathao Courier
 
@@ -86,7 +123,8 @@ flood that fills the pipe, so make sure both are on.
 | `RATE_LIMIT_ORDERS` | 30 | `POST /api/orders` (placing an order) |
 | `RATE_LIMIT_DRAFTS` | 300 | `POST /api/orders/draft` (form autosave) |
 | `RATE_LIMIT_LOGINS` | 20 | `POST /api/auth/google` |
-| `RATE_LIMIT_WINDOW_SECONDS` | 600 | the window for all three |
+| `RATE_LIMIT_WINDOW_SECONDS` | 600 | the window for the three above |
+| `RATE_LIMIT_TRACK` | 60 | `POST /api/track` (Meta event twins), per minute |
 | `ORDER_COOLDOWN_HOURS` | 24 | one order per phone number per window |
 
 Limits are deliberately loose: Bangladeshi mobile carriers put thousands of
