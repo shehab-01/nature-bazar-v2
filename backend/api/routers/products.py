@@ -156,7 +156,13 @@ async def create_product(
     session: AsyncSession = Depends(get_session),
 ) -> ProductSaveOut:
     product = Product(
-        title=payload.title, description=payload.description, is_active=False
+        title=payload.title,
+        description=payload.description,
+        is_active=False,
+        # Initialised here so the collection is known-empty: a freshly built
+        # row has nothing loaded, and touching it after the flush would fire
+        # a lazy load, which the async session cannot do.
+        variants=[],
     )
     session.add(product)
     await session.flush()
