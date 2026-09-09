@@ -95,10 +95,13 @@ spike into lost orders. Counters are per worker (`UVICORN_WORKERS=2`), so the
 effective ceiling is up to 2× the number above. Set a value to `0` to turn
 that limit off.
 
-The client address comes from `CF-Connecting-IP`, which Cloudflare sets and
-clients cannot forge. If the header ever stops arriving (Cloudflare removed),
-the limiter switches itself off rather than lock everyone out, and logs a
-warning once. Blocked addresses show up as:
+The client address comes from the header named in `CLIENT_IP_HEADER`:
+`cf-connecting-ip` behind Cloudflare (the default), `x-forwarded-for` behind
+nginx/OpenLiteSpeed. The header may be a comma-separated list; the API takes
+the rightmost public address, which is the one our own proxy appended and the
+only one a client cannot plant. If the header ever stops arriving (proxy
+swapped, variable not updated), the limiter switches itself off rather than
+lock everyone out, and logs a warning once. Blocked addresses show up as:
 
 ```bash
 docker compose logs api | grep ratelimit
@@ -117,6 +120,14 @@ docker compose logs api | grep ratelimit
 The origin is only reachable through the tunnel (`8000` and `8085` bind to
 `127.0.0.1`), so attackers cannot bypass Cloudflare by hitting the server's
 IP directly. Keep it that way.
+
+**Behind a plain reverse proxy instead (nginx, OpenLiteSpeed):** proxy the
+site to `http://127.0.0.1:${WEB_PORT}` (the web container; it forwards `/api`
+and `/media` to the API itself), make sure the proxy sets `X-Forwarded-For`,
+and put `CLIENT_IP_HEADER=x-forwarded-for` in `.env`, then
+`docker compose up -d --force-recreate api`. Admin → System → "Client address
+header" should show the visitor's real IP. Without Cloudflare there is no edge
+rate limit, so the API's own limits are the only brake.
 
 ## Status & logs
 

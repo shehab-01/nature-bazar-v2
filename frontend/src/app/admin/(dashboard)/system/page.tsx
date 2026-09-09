@@ -324,7 +324,7 @@ export default function SystemPage() {
                 tone={data.database.ok ? "good" : "critical"}
               />
               <Tile
-                label="Client address for rate limiting"
+                label="Client address header"
                 value={
                   data.request.client_ip_visible
                     ? `Visible · ${data.request.client_ip}`
@@ -332,8 +332,10 @@ export default function SystemPage() {
                 }
                 detail={
                   data.request.client_ip_visible
-                    ? `${data.request.via_cloudflare ? "Via Cloudflare" : "Direct"}${data.request.country ? ` · ${data.request.country}` : ""}`
-                    : `Per-IP limiting is off: ${data.rate_limits.client_ip_header} is not reaching the API`
+                    ? `${data.request.client_ip_header_present ? `From ${data.request.client_ip_header}` : "From socket address"}${data.request.via_cloudflare ? " · via Cloudflare" : ""}${data.request.country ? ` · ${data.request.country}` : ""}`
+                    : data.request.client_ip_header
+                      ? `Per-IP limiting is off: ${data.request.client_ip_header} is not reaching the API`
+                      : "Per-IP limiting is off: no public client address is reaching the API"
                 }
                 icon={data.request.client_ip_visible ? ShieldCheck : ShieldAlert}
                 tone={data.request.client_ip_visible ? "good" : "critical"}

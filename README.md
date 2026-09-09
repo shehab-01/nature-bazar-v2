@@ -13,6 +13,15 @@ docker compose ps
 
 The web app is available on the server at `127.0.0.1:3000`. The API is available on the server at `127.0.0.1:8000`. PostgreSQL is internal to the Compose network.
 
+## Put it behind a proxy
+
+Both ports bind to loopback, so something has to sit in front. Either works:
+
+- **Cloudflare Tunnel**: ingress rule for your hostname → `http://localhost:${WEB_PORT}`. Leave `CLIENT_IP_HEADER` at its default (`cf-connecting-ip`).
+- **Plain reverse proxy** (nginx, OpenLiteSpeed): proxy to `http://127.0.0.1:${WEB_PORT}` and set `CLIENT_IP_HEADER=x-forwarded-for` in `.env`. The web container forwards `/api` and `/media` to the API, so only one upstream is needed.
+
+The header names where the API reads the visitor's real IP for rate limiting. Check it landed in Admin → System → "Client address header". See `COMMANDS.md` → "Attack protection" for details.
+
 Useful checks:
 
 ```bash

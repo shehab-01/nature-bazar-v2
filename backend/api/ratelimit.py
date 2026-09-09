@@ -45,20 +45,30 @@ def client_ip(request: Request) -> str | None:
     The real client address, or None when it can't be known.
 
     Traffic reaches this container from the web container, so the socket
-    address is always the same internal IP. Cloudflare puts the true address
-    in CF-Connecting-IP and overwrites anything the client sent, and the only
-    way to reach this origin is through Cloudflare's tunnel, so that header can
-    be trusted. X-Forwarded-For is deliberately *not* used to identify anyone:
-    Cloudflare appends to it, so a client can plant any address at the front.
+    address is always the same internal IP. The proxy in front of us puts the
+    true address in the header named by settings.client_ip_header (the
+    CLIENT_IP_HEADER env var): CF-Connecting-IP behind Cloudflare,
+    X-Forwarded-For behind nginx or LiteSpeed.
 
-    None means only an internal address was visible — the header is missing,
-    e.g. Cloudflare was removed. Callers must then skip limiting: putting the
-    whole internet in one bucket would lock every real customer out.
+    The header may be a comma-separated list, because each proxy hop appends
+    the address it saw ("spoofed, real-ip"). A client can plant anything at
+    the *front* of that list, but only our own proxy writes the *end*, so the
+    rule is: take the rightmost entry that is not an internal address. A
+    single-value header (Cloudflare's) is the same rule with a list of one.
+    Internal entries are other proxy hops (the web container, a local
+    reverse proxy), never a customer, so they are skipped.
+
+    None means only internal addresses were visible — the header is missing,
+    e.g. the proxy was swapped without updating CLIENT_IP_HEADER. Callers must
+    then skip limiting: putting the whole internet in one bucket would lock
+    every real customer out.
     """
     header = settings.client_ip_header
-    value = request.headers.get(header, "").strip() if header else ""
-    if value and not _is_internal(value):
-        return value
+    value = request.headers.get(header, "") if header else ""
+    for candidate in reversed(value.split(",")):
+        candidate = candidate.strip()
+        if candidate and not _is_internal(candidate):
+            return candidate
     host = request.client.host if request.client else ""
     if host and not _is_internal(host):
         return host

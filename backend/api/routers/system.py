@@ -23,16 +23,25 @@ router = APIRouter(
     dependencies=[Depends(require_super_admin)],
 )
 
-# Headers that say where a request came from and what it passed through.
-FORWARDING_HEADERS = (
-    "cf-connecting-ip",
-    "cf-ray",
-    "cf-ipcountry",
-    "x-forwarded-for",
-    "x-forwarded-host",
-    "x-forwarded-proto",
-    "x-real-ip",
-    "user-agent",
+# Headers that say where a request came from and what it passed through. The
+# configured client-address header goes first so it is always listed, whatever
+# proxy sits in front (see CLIENT_IP_HEADER).
+FORWARDING_HEADERS = tuple(
+    header
+    for header in dict.fromkeys(
+        (
+            settings.client_ip_header.lower(),
+            "cf-connecting-ip",
+            "cf-ray",
+            "cf-ipcountry",
+            "x-forwarded-for",
+            "x-forwarded-host",
+            "x-forwarded-proto",
+            "x-real-ip",
+            "user-agent",
+        )
+    )
+    if header
 )
 
 TRAFFIC_COLUMNS = (
@@ -50,9 +59,9 @@ async def request_info(request: Request) -> dict:
     """
     What the API sees of the caller's own request: the socket address, the
     address the rate limiter would key on, and the forwarding headers that
-    survived the proxies in between. For checking that Cloudflare's client
-    address really reaches this container — if it doesn't, per-IP limiting
-    is silently off.
+    survived the proxies in between. For checking that the proxy's client
+    address header (CLIENT_IP_HEADER) really reaches this container — if it
+    doesn't, per-IP limiting is silently off.
     """
     return {
         "socket_client": request.client.host if request.client else None,
@@ -206,6 +215,12 @@ async def overview(
         "request": {
             "client_ip": ip,
             "client_ip_visible": ip is not None,
+            # Which header the address was read from, and whether it arrived.
+            "client_ip_header": settings.client_ip_header,
+            "client_ip_header_present": bool(
+                settings.client_ip_header
+                and request.headers.get(settings.client_ip_header)
+            ),
             "via_cloudflare": bool(request.headers.get("cf-ray")),
             "country": request.headers.get("cf-ipcountry"),
         },

@@ -27,6 +27,9 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:-}
       SUPER_ADMIN_EMAILS: ${SUPER_ADMIN_EMAILS:-}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Header carrying the real client IP: cf-connecting-ip behind Cloudflare,
+      # x-forwarded-for behind nginx/LiteSpeed. Runtime var.
+      CLIENT_IP_HEADER: ${CLIENT_IP_HEADER:-cf-connecting-ip}
       META_PIXEL_ID: ${META_PIXEL_ID:-}
       META_CAPI_ACCESS_TOKEN: ${META_CAPI_ACCESS_TOKEN:-}
       META_TEST_EVENT_CODE: ${META_TEST_EVENT_CODE:-}

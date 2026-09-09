@@ -616,6 +616,8 @@ export type SystemOverview = {
   request: {
     client_ip: string | null;
     client_ip_visible: boolean;
+    client_ip_header: string;
+    client_ip_header_present: boolean;
     via_cloudflare: boolean;
     country: string | null;
   };
