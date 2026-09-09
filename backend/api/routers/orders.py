@@ -194,10 +194,13 @@ def _set_flag(
 
 
 def _client_context(request: Request) -> meta_capi.ClientContext:
+    """
+    Match keys for the Purchase's server copy. The address follows the same
+    rule as the rate limiter: the configured proxy header via client_ip(),
+    else the socket peer. No reading of X-Forwarded-For's first entry — a
+    client can put anything there.
+    """
     ip = client_ip(request)
-    if not ip:
-        forwarded = request.headers.get("x-forwarded-for", "")
-        ip = forwarded.split(",")[0].strip() if forwarded else None
     if not ip and request.client:
         ip = request.client.host
     return meta_capi.ClientContext(
