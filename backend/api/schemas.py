@@ -568,3 +568,29 @@ class TrackEventIn(BaseModel):
     event_id: UUID
     event_source_url: str | None = Field(default=None, max_length=2048)
     custom_data: TrackCustomData | None = None
+
+
+class CapiResendIn(BaseModel):
+    """Which parked Conversions API events to resend; empty = the oldest 100."""
+
+    ids: list[int] | None = Field(default=None, max_length=100)
+
+
+class CapiFailedEventOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    created_at: datetime
+    attempts: int
+    last_error: str
+    payload: dict
+
+    @computed_field
+    @property
+    def event_name(self) -> str:
+        return str(self.payload.get("event_name", ""))
+
+    @computed_field
+    @property
+    def event_id(self) -> str:
+        return str(self.payload.get("event_id", ""))

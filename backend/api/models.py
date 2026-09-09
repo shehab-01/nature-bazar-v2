@@ -15,6 +15,7 @@ from sqlalchemy import (
     text,
 )
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -295,6 +296,25 @@ class IntegrationToken(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
     )
+
+
+class MetaCapiFailedEvent(Base):
+    """
+    A Conversions API event Meta never accepted: every retry failed, or the
+    request was rejected outright. The full payload is kept so it can be
+    resent from Admin → System once the cause (token, network, Meta outage)
+    is fixed. See api.services.meta_capi.
+    """
+
+    __tablename__ = "meta_capi_failed_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str] = mapped_column(Text, nullable=False, default="")
 
 
 class Product(Base):

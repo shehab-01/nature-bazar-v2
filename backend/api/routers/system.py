@@ -4,7 +4,7 @@ import shutil
 import time
 from datetime import datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,10 +12,10 @@ from api import monitoring
 from api.auth import require_super_admin
 from api.config import settings
 from api.db import engine, get_session
-from api.models import Order, OrderEvent, TrafficMinute, User, UserStatus
+from api.models import MetaCapiFailedEvent, Order, OrderEvent, TrafficMinute, User, UserStatus
 from api.ratelimit import client_ip, drafts_limiter, logins_limiter, orders_limiter
 from api.routers.track import track_limiter
-from api.schemas import PathaoStatusOut
+from api.schemas import CapiFailedEventOut, CapiResendIn, PathaoStatusOut
 from api.services import meta_capi, pathao
 
 router = APIRouter(
@@ -247,6 +247,10 @@ async def overview(
             "meta_pixel": bool(settings.meta_pixel_id),
             "meta_capi": meta_capi.enabled(),
             "meta_test_mode": bool(settings.meta_test_event_code),
+            # Events Meta never accepted, parked for a resend (all workers),
+            # and deliveries this worker still has in flight.
+            "meta_capi_failed": await meta_capi.failed_count(session),
+            "meta_capi_pending": meta_capi.pending(),
             "google_login": bool(settings.google_client_id),
             "secure_cookies": settings.cookie_secure,
         },
@@ -276,3 +280,48 @@ async def pathao_status() -> PathaoStatusOut:
     except pathao.PathaoError as exc:
         out.error = pathao.error_text(exc)
     return out
+
+
+# --- Meta Conversions API: parked events -------------------------------------
+
+
+@router.get("/capi/failed", response_model=list[CapiFailedEventOut])
+async def capi_failed(
+    session: AsyncSession = Depends(get_session),
+) -> list[MetaCapiFailedEvent]:
+    """
+    Events Meta never accepted, oldest first: every retry timed out or failed,
+    or the request was rejected (bad token, malformed payload). The payload is
+    kept whole so a resend is the same event, same event_id, same event_time.
+    """
+    rows = await session.scalars(
+        select(MetaCapiFailedEvent).order_by(MetaCapiFailedEvent.id).limit(200)
+    )
+    return list(rows.all())
+
+
+@router.post("/capi/failed/resend")
+async def capi_resend(
+    payload: CapiResendIn | None = None,
+    session: AsyncSession = Depends(get_session),
+) -> dict:
+    """
+    Try the parked events again, one attempt each. Delivered rows disappear;
+    the rest keep the new error. Meta accepts website events up to seven days
+    old, so anything older than that will keep failing and should be deleted.
+    """
+    if not meta_capi.enabled():
+        raise HTTPException(status_code=409, detail="Conversions API is not configured")
+    return await meta_capi.resend_failed(session, ids=payload.ids if payload else None)
+
+
+@router.delete("/capi/failed/{event_id}", status_code=204)
+async def capi_delete_failed(
+    event_id: int, session: AsyncSession = Depends(get_session)
+) -> None:
+    """Drop a parked event that can never be delivered (too old, bad payload)."""
+    row = await session.get(MetaCapiFailedEvent, event_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="No such parked event")
+    await session.delete(row)
+    await session.commit()

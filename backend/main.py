@@ -13,7 +13,7 @@ from api.routers.auth import router as auth_router
 from api.routers.orders import router as orders_router
 from api.routers.products import public_router as storefront_router
 from api.routers.products import router as products_router
-from api.services import pathao_sync
+from api.services import meta_capi, pathao_sync
 from api.routers.system import router as system_router
 from api.routers.track import router as track_router
 from api.routers.users import router as users_router
@@ -25,6 +25,9 @@ async def lifespan(app: FastAPI):
     pathao_sync.start()
     yield
     await pathao_sync.stop()
+    # Let in-flight Conversions API deliveries (retries included) finish
+    # before the worker goes away, so a redeploy never loses a Purchase.
+    await meta_capi.drain()
     await monitoring.stop()
     await engine.dispose()
 

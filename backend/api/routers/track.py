@@ -14,7 +14,7 @@ match keys (IP, user agent, _fbp/_fbc cookies) are taken from the request.
 """
 from urllib.parse import urlparse
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request, Response
+from fastapi import APIRouter, Depends, Request, Response
 
 from api.config import settings
 from api.ratelimit import RateLimiter
@@ -44,12 +44,8 @@ def _is_admin_url(url: str | None) -> bool:
     response_class=Response,
     dependencies=[Depends(track_limiter)],
 )
-async def track_event(
-    payload: TrackEventIn,
-    request: Request,
-    background: BackgroundTasks,
-) -> Response:
-    """Acknowledge at once; the Conversions API call runs after the response."""
+async def track_event(payload: TrackEventIn, request: Request) -> Response:
+    """Acknowledge at once; the Conversions API call runs as its own task."""
     # Staff traffic never reaches Meta: the browser already skips /admin, and
     # this guards the same line on the server for anything that slips through.
     if _is_admin_url(payload.event_source_url) or _is_admin_url(
@@ -70,5 +66,5 @@ async def track_event(
             else None
         ),
     )
-    background.add_task(meta_capi.send_event, event)
+    meta_capi.dispatch(event)
     return Response(status_code=204)

@@ -2,7 +2,7 @@ import math
 import re
 from datetime import date, datetime, time, timedelta, timezone
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import and_, delete, distinct, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -334,7 +334,6 @@ async def save_order_draft(
 async def create_order(
     payload: OrderCreate,
     request: Request,
-    background: BackgroundTasks,
     session: AsyncSession = Depends(get_session),
 ) -> Order:
     name = payload.customer_name.strip()
@@ -457,9 +456,11 @@ async def create_order(
     )
     await session.commit()
     order = await _get_fresh_order(session, order.id)
+    # The server copy of the Purchase the browser Pixel fires with the order
+    # number as eventID. Scheduled as its own task (retries, then parked on
+    # failure — see meta_capi), so the response is never held up by Meta.
     if meta_capi.enabled():
-        background.add_task(
-            meta_capi.send_purchase,
+        meta_capi.send_purchase(
             order_no=f"NB-{order.id}",
             customer_name=order.customer_name,
             phone=order.phone,
@@ -908,6 +909,11 @@ async def create_manual_order(
 
     Prices come from the catalogue, never from the request: the browser sends
     variant ids and quantities only.
+
+    No Meta Purchase event is sent for these, on purpose: they are typed in by
+    staff from a call or a chat, not placed on the site, so there is no ad
+    click, browser or Pixel event to attribute them to. Sending them would
+    inflate the website conversion count with sales the ads never touched.
     """
     rows = await session.execute(
         select(ProductVariant, Product)

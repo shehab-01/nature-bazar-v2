@@ -6,11 +6,17 @@ counts it when the browser copy never arrived (ad blocker, tab closed early).
 Purchase uses the order number as the shared id and is sent by the order
 endpoint; the other events come in through POST /api/track with a UUID.
 
+Delivery runs as its own asyncio task, detached from the request that produced
+the event, with retries on timeouts, connection errors, 5xx and 429. An event
+that still cannot be delivered is parked in meta_capi_failed_events for a
+resend from Admin → System. Nothing here ever raises into a request handler.
+
 Docs: https://developers.facebook.com/docs/marketing-api/conversions-api
 """
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -18,16 +24,29 @@ import time
 from dataclasses import dataclass
 from urllib.parse import parse_qs, urlparse
 
-import requests
+import httpx
 from fastapi import Request
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.config import settings
+from api.models import MetaCapiFailedEvent
 from api.ratelimit import client_ip
 
 log = logging.getLogger("meta_capi")
 
 CURRENCY = "BDT"
 TIMEOUT_SECONDS = 5
+# Pauses before each retry, so an event gets 1 + len(RETRY_DELAYS) attempts.
+RETRY_DELAYS: tuple[float, ...] = (1.0, 3.0, 9.0)
+RETRYABLE_STATUS = frozenset({429} | set(range(500, 600)))
+
+# Tests inject an httpx.MockTransport here; production leaves it None.
+transport: httpx.AsyncBaseTransport | None = None
+
+# Strong references to in-flight deliveries: a bare create_task() result can
+# be garbage-collected mid-flight. drain() waits on these at shutdown.
+_tasks: set[asyncio.Task] = set()
 
 
 @dataclass(frozen=True)
@@ -39,6 +58,15 @@ class ClientContext:
     fbp: str | None  # _fbp cookie set by the pixel (or our bootstrap)
     fbc: str | None  # _fbc cookie (click id) set by the pixel, or synthesised
     source_url: str | None
+
+
+@dataclass(frozen=True)
+class Delivery:
+    """The outcome of trying to deliver one event."""
+
+    ok: bool
+    attempts: int
+    last_error: str = ""
 
 
 def enabled() -> bool:
@@ -184,6 +212,9 @@ def build_purchase_event(
     return event
 
 
+# --- delivery ----------------------------------------------------------------
+
+
 def _events_url() -> str:
     return (
         f"https://graph.facebook.com/{settings.meta_api_version}/"
@@ -191,34 +222,157 @@ def _events_url() -> str:
     )
 
 
-def send_event(event: dict) -> None:
-    """Post one event. Safe to run as a FastAPI background task.
-
-    Never raises: a Meta outage must not affect the request that produced it.
-    """
-    if not enabled():
-        return
+def _payload(event: dict) -> dict:
     payload: dict = {"data": [event]}
     if settings.meta_test_event_code:
         payload["test_event_code"] = settings.meta_test_event_code
-    label = f"{event.get('event_name')} {event.get('event_id')}"
+    return payload
+
+
+def _label(event: dict) -> str:
+    return f"{event.get('event_name')} {event.get('event_id')}"
+
+
+async def deliver(event: dict, *, retry: bool = True) -> Delivery:
+    """
+    Post one event, retrying on timeouts, connection errors, 5xx and 429 with
+    the RETRY_DELAYS backoff. Other 4xx are final: the payload or the token
+    is wrong and sending it again would not change that.
+    """
+    label = _label(event)
+    delays = (0.0, *RETRY_DELAYS) if retry else (0.0,)
+    attempts = 0
+    last_error = ""
+    async with httpx.AsyncClient(timeout=TIMEOUT_SECONDS, transport=transport) as client:
+        for delay in delays:
+            if delay:
+                await asyncio.sleep(delay)
+            attempts += 1
+            try:
+                res = await client.post(
+                    _events_url(),
+                    json=_payload(event),
+                    params={"access_token": settings.meta_capi_access_token},
+                )
+            except httpx.HTTPError as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                log.warning("CAPI %s attempt %d failed: %s", label, attempts, last_error)
+                continue
+            if res.is_success:
+                log.info("CAPI %s sent (attempt %d): %s", label, attempts, res.text[:300])
+                return Delivery(ok=True, attempts=attempts)
+            last_error = f"HTTP {res.status_code}: {res.text[:500]}"
+            if res.status_code in RETRYABLE_STATUS:
+                log.warning("CAPI %s attempt %d: %s", label, attempts, last_error)
+                continue
+            log.warning("CAPI %s rejected, not retrying: %s", label, last_error)
+            break
+    return Delivery(ok=False, attempts=attempts, last_error=last_error)
+
+
+async def persist_failed(event: dict, attempts: int, last_error: str) -> None:
+    """Park an undeliverable event for a later resend. Never raises."""
+    # Imported here so the sender can be tested without a database engine.
+    from api.db import async_session
+
     try:
-        res = requests.post(
-            _events_url(),
-            json=payload,
-            params={"access_token": settings.meta_capi_access_token},
-            timeout=TIMEOUT_SECONDS,
+        async with async_session() as session:
+            session.add(
+                MetaCapiFailedEvent(
+                    payload=event, attempts=attempts, last_error=last_error[:2000]
+                )
+            )
+            await session.commit()
+        log.error(
+            "CAPI %s gave up after %d attempt(s), parked for resend: %s",
+            _label(event),
+            attempts,
+            last_error,
         )
-        if res.ok:
-            log.info("CAPI %s sent: %s", label, res.text)
-        else:
-            log.warning("CAPI %s rejected (%s): %s", label, res.status_code, res.text[:500])
-    except requests.RequestException as exc:
-        log.warning("CAPI %s failed: %s", label, exc)
+    except Exception:  # noqa: BLE001 — logging is all that is left to do
+        log.exception("CAPI %s could not be parked after failing: %s", _label(event), last_error)
+
+
+async def deliver_or_park(event: dict) -> Delivery:
+    """The full path for a new event: deliver with retries, park on failure."""
+    result = await deliver(event)
+    if not result.ok:
+        await persist_failed(event, result.attempts, result.last_error)
+    return result
+
+
+def dispatch(event: dict) -> None:
+    """
+    Schedule delivery as a task of its own. Returns at once; the request that
+    produced the event never waits on Meta, and the task outlives it.
+    """
+    if not enabled():
+        return
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        log.warning("CAPI %s dropped: no running event loop", _label(event))
+        return
+    task = loop.create_task(deliver_or_park(event))
+    _tasks.add(task)
+    task.add_done_callback(_tasks.discard)
+
+
+def pending() -> int:
+    """Deliveries still in flight in this worker."""
+    return sum(1 for task in _tasks if not task.done())
+
+
+async def drain(timeout: float = 20.0) -> None:
+    """Wait for in-flight deliveries; called from the app's shutdown."""
+    live = [task for task in _tasks if not task.done()]
+    if not live:
+        return
+    log.info("waiting up to %.0fs for %d CAPI delivery(ies)", timeout, len(live))
+    await asyncio.wait(live, timeout=timeout)
 
 
 def send_purchase(**kwargs) -> None:
-    """Post a Purchase event. Safe to run as a FastAPI background task."""
+    """Send a Purchase event for a web order (see build_purchase_event)."""
     if not enabled():
         return
-    send_event(build_purchase_event(**kwargs))
+    dispatch(build_purchase_event(**kwargs))
+
+
+# --- parked events -----------------------------------------------------------
+
+
+async def failed_count(session: AsyncSession) -> int:
+    return int(
+        await session.scalar(select(func.count()).select_from(MetaCapiFailedEvent)) or 0
+    )
+
+
+async def resend_failed(
+    session: AsyncSession, ids: list[int] | None = None, limit: int = 100
+) -> dict:
+    """
+    Try each parked event once more (one attempt, no backoff: the operator is
+    waiting). Delivered rows are deleted; the rest keep the new error.
+    """
+    query = select(MetaCapiFailedEvent).order_by(MetaCapiFailedEvent.id).limit(limit)
+    if ids:
+        query = query.where(MetaCapiFailedEvent.id.in_(ids))
+    rows = (await session.scalars(query)).all()
+    sent = 0
+    still_failing = 0
+    for row in rows:
+        result = await deliver(row.payload, retry=False)
+        if result.ok:
+            await session.delete(row)
+            sent += 1
+        else:
+            row.attempts += result.attempts
+            row.last_error = result.last_error[:2000]
+            still_failing += 1
+    await session.commit()
+    return {
+        "sent": sent,
+        "failed": still_failing,
+        "remaining": await failed_count(session),
+    }
