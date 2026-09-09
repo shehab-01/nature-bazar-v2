@@ -1,0 +1,432 @@
+/*
+ * The landing page. Mobile first: every rule below is written for a phone,
+ * and the only thing the max-width does is stop the column growing on a
+ * desktop rather than re-laying anything out.
+ *
+ * One stack of white cards on a soft ground, slim padding throughout, so the
+ * page reads as a few clear steps rather than one long scroll.
+ *
+ * Scoped under .nb-landing so none of it can reach the old storefront in
+ * globals.css, or the admin.
+ */
+
+.nb-landing {
+  --nb-bg: #eef1ea;
+  --nb-card: #ffffff;
+  --nb-line: #e3e6dc;
+  --nb-gold: #c8902f;
+  --nb-red: #e23c34;
+  --nb-green: #1a9c4d;
+  --nb-price: #12341f;
+  --nb-muted: #6e746d;
+  --nb-radius: 14px;
+
+  max-width: 560px;
+  margin: 0 auto;
+  background: var(--nb-bg);
+  min-height: 100vh;
+  font-family: var(--font-hind, "Hind Siliguri"), sans-serif;
+  box-shadow: 0 0 50px #183d2412;
+}
+
+/* --- Top bar ------------------------------------------------------------ */
+
+/* Nothing but the logo, centred. No cart, no order tracking. Pinned to the
+   top so the brand stays in view down the whole scroll. */
+.nb-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 62px;
+  padding: 8px 16px;
+  background: var(--deep);
+  box-shadow: 0 1px 6px #12341f26;
+}
+.nb-header img {
+  width: 140px;
+  height: 46px;
+  object-fit: contain;
+}
+
+/* --- Cards -------------------------------------------------------------- */
+
+.nb-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+}
+.nb-card {
+  padding: 14px 12px;
+  background: var(--nb-card);
+  border: 1px solid var(--nb-line);
+  border-radius: var(--nb-radius);
+  box-shadow: 0 1px 2px #12341f0a;
+}
+.nb-card > h2,
+.nb-block > h2,
+.nb-desc > h2 {
+  margin: 0 0 12px;
+  text-align: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+
+/* The steps inside the product card — pick a size, see the total, fill the
+   form — each get a slim frame, so the one card still reads as a sequence. */
+.nb-block {
+  /* The header is sticky, so a scroll to a block stops just below it. */
+  scroll-margin-top: 72px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--nb-line);
+  border-radius: 12px;
+}
+
+.nb-summary div {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 9px 0;
+  font-size: 14px;
+}
+.nb-summary div + div {
+  border-top: 1px solid var(--nb-line);
+}
+.nb-summary div:first-child {
+  padding-top: 0;
+}
+.nb-summary div:last-child {
+  padding-bottom: 0;
+}
+.nb-summary-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+
+/* --- Product ------------------------------------------------------------ */
+
+.nb-product h1 {
+  margin: 2px 0 12px;
+  text-align: center;
+  font-size: clamp(19px, 5.4vw, 24px);
+  font-weight: 700;
+  line-height: 1.35;
+  color: var(--nb-price);
+}
+.nb-product-image {
+  overflow: hidden;
+  border: 1px solid var(--nb-line);
+  border-radius: 12px;
+}
+.nb-product-image img {
+  width: 100%;
+  height: auto;
+  /* Swapping size remounts the image; the fade covers the load. */
+  animation: nb-fade 0.25s ease;
+}
+/* A version with no picture shows the logo instead: the dark ground it was
+   drawn for, letterboxed to the shape a product photo would have had. */
+.nb-product-image[data-placeholder] {
+  background: var(--deep);
+}
+.nb-product-image[data-placeholder] img {
+  aspect-ratio: 4 / 3;
+  padding: 18%;
+  object-fit: contain;
+}
+@keyframes nb-fade {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nb-product-image img {
+    animation: none;
+  }
+}
+
+/* Only jumps to the form; it never submits. Not full width: a centred
+   button under the picture reads as an invitation, the full-width one is
+   saved for the confirm at the bottom of the form. */
+.nb-cta-top {
+  display: block;
+  width: fit-content;
+  min-width: 60%;
+  margin: 20px auto 8px;
+  padding: 16px 36px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nb-red);
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  text-align: center;
+  cursor: pointer;
+}
+/* The same button once more at the foot of the page, for whoever read the
+   whole description before deciding. Full width, since it stands alone. */
+.nb-cta-bottom {
+  width: 100%;
+  margin: 4px 0 6px;
+}
+
+
+/* --- Size picker -------------------------------------------------------- */
+
+.nb-variant {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 10px;
+  border: 1px solid var(--nb-line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.nb-variant:last-of-type {
+  margin-bottom: 0;
+}
+/* The selected size is the one the form and the confirm button price. */
+.nb-variant[data-selected="true"] {
+  border: 2px solid var(--nb-gold);
+  padding: 9px;
+  background: #fdf9f1;
+}
+/* Keyboard users get the ring the pointer never needs. */
+.nb-variant:focus-within {
+  outline: 2px solid var(--nb-gold);
+  outline-offset: 2px;
+}
+.nb-variant input[type="radio"] {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--nb-gold);
+}
+.nb-variant-thumb {
+  flex: none;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.nb-variant-thumb[data-placeholder] {
+  padding: 6px;
+  background: var(--deep);
+  object-fit: contain;
+}
+.nb-variant-text {
+  min-width: 0;
+}
+.nb-variant-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.4;
+  color: var(--nb-price);
+}
+.nb-price {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+
+/* --- Form --------------------------------------------------------------- */
+
+.nb-field {
+  display: block;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.nb-field span {
+  display: block;
+  margin-bottom: 5px;
+}
+.nb-field input,
+.nb-field textarea {
+  width: 100%;
+  padding: 11px 12px;
+  border: 1px solid var(--nb-line);
+  border-radius: 10px;
+  background: var(--nb-card);
+  color: inherit;
+  /* 16px, or iOS Safari zooms the page on focus. */
+  font: inherit;
+  font-size: 16px;
+}
+.nb-field textarea {
+  min-height: 80px;
+  resize: vertical;
+}
+.nb-field input:focus,
+.nb-field textarea:focus {
+  outline: 2px solid var(--nb-gold);
+  outline-offset: 1px;
+}
+.nb-field input[aria-invalid="true"] {
+  border-color: var(--nb-red);
+}
+
+.nb-confirm {
+  width: 100%;
+  margin: 8px 0 4px;
+  padding: 17px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: var(--nb-gold);
+  color: #fff;
+  font: inherit;
+  font-size: 17px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.nb-confirm:disabled {
+  background: #d9cdb4;
+  cursor: default;
+}
+.nb-confirm-note {
+  margin: 10px 0 0;
+  text-align: center;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--nb-muted);
+}
+.nb-form-error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: #fdecea;
+  color: #a32219;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+/* --- Description -------------------------------------------------------- */
+
+/* Last in the card, set off from the form by a rule rather than a frame. */
+.nb-desc {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--nb-line);
+}
+.nb-desc > h2 {
+  text-align: left;
+}
+.nb-desc p {
+  margin: 0 0 12px;
+  font-size: 15px;
+  line-height: 1.8;
+  /* Single line breaks inside a paragraph are kept as typed in the admin. */
+  white-space: pre-line;
+}
+.nb-desc p:last-child {
+  margin-bottom: 0;
+}
+
+/* --- Footer ------------------------------------------------------------- */
+
+/* --- Footer ------------------------------------------------------------- */
+
+/* One more card, sitting outside the stack so it gets the same margins. A
+   deep warm brown rather than the green of everything above: still earthy,
+   as dark as the header, so the page closes the way it opened. The logo is
+   white on transparent and was drawn for a ground like this. */
+.nb-footer {
+  --nb-earth: #3a2d20;
+  --nb-earth-line: #55463a;
+  --nb-earth-text: #d8cdb9;
+
+  margin: 0 10px 10px;
+  padding: 20px 12px 22px;
+  text-align: center;
+  background: var(--nb-earth);
+  border: 1px solid var(--nb-earth-line);
+  border-radius: var(--nb-radius);
+  box-shadow: 0 1px 2px #12341f0a;
+  color: var(--nb-earth-text);
+  font-size: 12px;
+}
+.nb-footer img {
+  width: 110px;
+  height: 36px;
+  margin: 0 auto 8px;
+  object-fit: contain;
+}
+.nb-footer p {
+  margin: 4px 0 0;
+}
+.nb-footer a {
+  color: #e6b85e;
+  font-weight: 600;
+  text-decoration: underline;
+}
+
+/* --- Nothing on sale ---------------------------------------------------- */
+
+.nb-closed {
+  padding: 40px 18px;
+  text-align: center;
+}
+.nb-closed h1 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+.nb-closed p {
+  margin: 0;
+  color: var(--nb-muted);
+}
+
+/* --- Policy pages ------------------------------------------------------- */
+
+.nb-legal {
+  padding: 18px 16px;
+}
+.nb-legal h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+.nb-legal .nb-legal-date {
+  margin: 0 0 18px;
+  font-size: 13px;
+  color: var(--nb-muted);
+}
+.nb-legal h2 {
+  margin: 22px 0 8px;
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--nb-price);
+}
+.nb-legal p,
+.nb-legal li {
+  margin: 0 0 10px;
+  font-size: 15px;
+  line-height: 1.75;
+}
+.nb-legal ul {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.nb-legal a {
+  color: var(--green);
+  text-decoration: underline;
+}
+.nb-back {
+  display: inline-block;
+  margin-top: 18px;
+  color: var(--green);
+  font-weight: 700;
+  text-decoration: none;
+}

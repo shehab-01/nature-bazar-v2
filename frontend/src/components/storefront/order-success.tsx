@@ -30,12 +30,10 @@ export function OrderSuccess({
   order,
   product,
   fresh,
-  onOrderAnother,
 }: {
   order: LastOrder;
   product: StorefrontProduct;
   fresh: boolean;
-  onOrderAnother: () => void;
 }) {
   const quantity = Math.max(1, product.defaultQuantity);
   return (
@@ -111,9 +109,6 @@ export function OrderSuccess({
 
       <p className="order-done-more">
         আরও কিছু নিতে চান? প্রতিনিধিকে ফোনেই জানিয়ে দিন।
-        <button type="button" onClick={onOrderAnother}>
-          অন্য নম্বরের জন্য নতুন অর্ডার
-        </button>
       </p>
     </div>
   );

@@ -31,14 +31,6 @@ class Settings:
     # order normally prices against the active row (see api.routers.products).
     # Price is decided server-side either way; client-sent totals are never
     # trusted.
-    product_name: str = os.getenv(
-        "PRODUCT_NAME",
-        "স্পেশাল আচার কম্বো (ইলিশ, গরুর মাংস, চেপা শুটকি)",
-    )
-    unit_price: int = int(os.getenv("UNIT_PRICE", "1490"))
-    # Must match PRODUCT.item_id in frontend/src/lib/tracking.ts so browser and
-    # server events describe the same catalogue item.
-    product_sku: str = os.getenv("PRODUCT_SKU", "combo-1490")
 
     # Where uploaded product images are written. This must be a mounted volume:
     # anything written elsewhere in the container is lost on the next rebuild.

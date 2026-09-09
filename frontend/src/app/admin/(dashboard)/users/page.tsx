@@ -8,7 +8,7 @@ import { getTeamColumns } from "@/components/admin/users/columns";
 import { NicknameDialog } from "@/components/admin/users/nickname-dialog";
 import { PendingRequests } from "@/components/admin/users/pending-requests";
 import { deleteUser, listUsers, updateUser } from "@/lib/api";
-import type { TeamMember, UserStatus } from "@/lib/team";
+import type { TeamMember, UserRole, UserStatus } from "@/lib/team";
 
 export default function UsersPage() {
   const { user: currentUser } = useAuth();
@@ -67,6 +67,25 @@ export default function UsersPage() {
     [refresh]
   );
 
+  const handleRoleChange = React.useCallback(
+    async (id: number, role: UserRole) => {
+      const member = users.find((u) => u.id === id);
+      const name = member?.nickname || member?.name || "this member";
+      const question =
+        role === "super_admin"
+          ? `Make ${name} a super admin? They will be able to manage products, users and every order.`
+          : `Make ${name} order staff? They will lose access to products and user management.`;
+      if (!window.confirm(question)) return;
+      try {
+        await updateUser(id, { role });
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to change role");
+      }
+    },
+    [refresh, users]
+  );
+
   const [nicknameFor, setNicknameFor] = React.useState<TeamMember | null>(null);
 
   const handleNickname = React.useCallback(
@@ -86,9 +105,10 @@ export default function UsersPage() {
       getTeamColumns({
         currentUserId: currentUser.id,
         onStatusChange: handleStatusChange,
+        onRoleChange: handleRoleChange,
         onEditNickname: setNicknameFor,
       }),
-    [currentUser.id, handleStatusChange]
+    [currentUser.id, handleStatusChange, handleRoleChange]
   );
 
   const pending = users.filter((u) => u.status === "pending");

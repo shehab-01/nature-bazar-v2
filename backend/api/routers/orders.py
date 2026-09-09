@@ -3,7 +3,7 @@ import re
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import and_, delete, distinct, exists, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import get_current_user
@@ -17,19 +17,24 @@ from api.models import (
     OrderStatus,
     OrderTag,
     Product,
+    ProductVariant,
     User,
     UserRole,
 )
 from api.phone import phone_digits, phone_key
 from api.ratelimit import client_ip, drafts_limiter, orders_limiter
 from api import catalogue
-from api.services import meta_capi, pathao
+from api.services import meta_capi, pathao, pathao_sync
 from api.schemas import (
     BulkOrderResult,
     BulkOrderUpdate,
     BulkSkipped,
     ClaimOut,
     ClaimsOut,
+    ActivityOut,
+    DashboardOut,
+    DashboardPeriod,
+    DashboardTotals,
     OrderCountsOut,
     OrderCreate,
     OrderDraft,
@@ -38,6 +43,7 @@ from api.schemas import (
     OrderOut,
     OrderStatsOut,
     OrderUpdate,
+    Performer,
     ManualOrderCreate,
     PhoneLookupOut,
     PathaoFailure,
@@ -49,14 +55,15 @@ from api.schemas import (
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 
-def _active_line(product: catalogue.ActiveProduct, quantity: int) -> OrderItem:
-    """The single line a storefront order carries. The storefront sells one
-    product at a time, but it is written as an item like any other so the admin
-    never has to render two shapes of order."""
+def _line(sold: catalogue.Sellable, quantity: int) -> OrderItem:
+    """One order line, priced from the catalogue. The storefront sells one
+    variant per order, but it is written as an item like any other so the
+    admin never has to render two shapes of order."""
     return OrderItem(
-        product_id=product.id,
-        product_name=product.title,
-        unit_price=product.unit_price,
+        product_id=sold.product_id,
+        variant_id=sold.variant_id,
+        product_name=sold.title,
+        unit_price=sold.unit_price,
         quantity=quantity,
     )
 
@@ -79,6 +86,23 @@ def _claim_stale_before() -> datetime:
 
 def _day_start(d: date) -> datetime:
     return datetime.combine(d, time.min, tzinfo=timezone.utc)
+
+
+# The shop's clock. Bangladesh has no daylight saving, so a fixed offset is
+# exact and needs no tz database in the container.
+DHAKA = timezone(timedelta(hours=6), "Asia/Dhaka")
+
+
+def _dhaka_day(d: date) -> tuple[datetime, datetime]:
+    """The instants a Dhaka calendar day starts and ends."""
+    start = datetime.combine(d, time.min, tzinfo=DHAKA)
+    return start, start + timedelta(days=1)
+
+
+def _dhaka_month(d: date) -> tuple[datetime, datetime]:
+    start = datetime(d.year, d.month, 1, tzinfo=DHAKA)
+    end = datetime(d.year + (d.month == 12), d.month % 12 + 1, 1, tzinfo=DHAKA)
+    return start, end
 
 
 async def _get_fresh_order(session: AsyncSession, order_id: int) -> Order:
@@ -255,9 +279,14 @@ async def save_order_draft(
 
     name = payload.customer_name.strip()
     address = payload.address.strip()
-    product = await catalogue.active(session)
 
     if order is None:
+        # A new lead is written against what is on sale, so the Incomplete
+        # list shows what they were about to buy. Nothing live, nothing to
+        # record it against — and nothing they could have ordered anyway.
+        product = await catalogue.active(session)
+        if product is None:
+            return OrderDraftOut(saved=False)
         order = Order(
             customer_name=name,
             phone=phone,
@@ -270,7 +299,7 @@ async def save_order_draft(
             quantity=1,
             unit_price=product.unit_price,
             total_amount=product.unit_price,
-            items=[_active_line(product, 1)],
+            items=[_line(product, 1)],
         )
         session.add(order)
         await session.flush()
@@ -311,7 +340,20 @@ async def create_order(
     name = payload.customer_name.strip()
     phone = payload.phone.strip()
     address = payload.address.strip()
+    note = payload.note.strip()
     key = phone_key(phone)
+
+    # The variant the customer picked, priced from the catalogue row it names.
+    # Checked before anything else: a bad id is a broken page, not an order,
+    # and with nothing live there is nothing to sell at any price.
+    product = await catalogue.for_order(session, payload.variant_id)
+    if product is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Unknown product"
+            if payload.variant_id is not None
+            else "Nothing is on sale right now",
+        )
 
     # One order per number per cooldown window. This is an index lookup on
     # phone_key, so it stays fast however large the table grows; only the
@@ -349,8 +391,6 @@ async def create_order(
     if draft is None:
         draft = await _find_open_draft(session, key)
 
-    product = await catalogue.active(session)
-
     if draft is not None:
         order = draft
         order.customer_name = name
@@ -363,8 +403,16 @@ async def create_order(
         order.product_name = product.title
         order.unit_price = product.unit_price
         order.total_amount = product.unit_price * payload.quantity
-        order.items = [_active_line(product, payload.quantity)]
+        order.items = [_line(product, payload.quantity)]
+        # A note typed on the form outranks whatever the draft held, but an
+        # empty one must not wipe a comment staff may have left on the lead.
+        if note:
+            order.comment = note
         order.status = OrderStatus.processing.value
+        # The customer finished the form themselves, so this is a website
+        # order like any other. "incomplete" is reserved for leads that staff
+        # worked from the Incomplete list — those keep it when they move.
+        order.source = OrderSource.website.value
         # The row was created when the form was abandoned, maybe hours ago.
         # The order is placed now — that is what "Created At", the cooldown
         # window and the Purchase event should all use. The draft's own
@@ -381,7 +429,8 @@ async def create_order(
             quantity=payload.quantity,
             unit_price=product.unit_price,
             total_amount=product.unit_price * payload.quantity,
-            items=[_active_line(product, payload.quantity)],
+            items=[_line(product, payload.quantity)],
+            comment=note,
         )
         session.add(order)
         await session.flush()
@@ -579,6 +628,213 @@ async def order_stats(
     )
 
 
+# --- Dashboard ---------------------------------------------------------------
+#
+# Where an order stands, for the dashboard's purposes. Statuses are grouped by
+# what they mean to the business rather than listed one by one: an order is
+# being worked, has been won, has gone quiet, or was lost.
+
+# Won: confirmed on the phone, and the two states a confirmed order moves on to.
+WON = (
+    OrderStatus.confirmed.value,
+    OrderStatus.shipped.value,
+    OrderStatus.history.value,
+)
+# An order, as opposed to a lead: it arrived from the site or from staff.
+# Leads keep source "incomplete" for life, even once recovered.
+_IS_ORDER = and_(
+    Order.source.in_((OrderSource.website.value, OrderSource.manual.value)),
+    Order.status != OrderStatus.incomplete.value,
+)
+_IS_LEAD = Order.source == OrderSource.incomplete.value
+# Placed by anyone: every row that is not still an abandoned form.
+_PLACED = Order.status != OrderStatus.incomplete.value
+# Delivered means Pathao said so — archiving an order by hand never counts.
+# Credited to the month the order was placed in, not the month the parcel
+# arrived: an order from 30 September delivered on 1 October is September's.
+# The audit trail is checked as well as the current status, so a parcel that
+# was reported delivered stays counted whatever Pathao says afterwards.
+_DELIVERED = or_(
+    func.lower(Order.pathao_status) == "delivered",
+    exists().where(
+        OrderEvent.order_id == Order.id,
+        OrderEvent.event_type == "pathao_status",
+        func.lower(OrderEvent.note) == "delivered",
+    ),
+)
+
+
+async def _counts(session: AsyncSession, start: datetime, end: datetime) -> dict:
+    """Every dashboard count for the orders created in [start, end), in one
+    query: each figure is a filtered count over the same rows.
+
+    "processing" is the untouched count: orders still exactly where they
+    landed. Confirming one, holding one, marking it no-response — any change
+    at all — takes it out of that figure, which is what makes it a to-do.
+    """
+    count = func.count()
+    row = (
+        await session.execute(
+            select(
+                count.filter(_IS_ORDER),
+                count.filter(_IS_ORDER, Order.status == OrderStatus.processing.value),
+                # Won from anywhere: the site, staff, and recovered leads.
+                count.filter(_PLACED, Order.status.in_(WON)),
+                count.filter(_PLACED, _DELIVERED),
+                count.filter(_IS_ORDER, Order.status == OrderStatus.no_response.value),
+                count.filter(_IS_ORDER, Order.status == OrderStatus.cancelled.value),
+                count.filter(_IS_ORDER, Order.source == OrderSource.manual.value),
+                count.filter(_IS_LEAD),
+                count.filter(_IS_LEAD, Order.status == OrderStatus.incomplete.value),
+                count.filter(_IS_LEAD, Order.status.in_(WON)),
+            ).where(Order.created_at >= start, Order.created_at < end)
+        )
+    ).one()
+    keys = (
+        "landed", "processing", "confirmed", "delivered",
+        "no_response", "cancelled", "manual",
+        "leads", "leads_processing", "leads_confirmed",
+    )
+    return dict(zip(keys, row))
+
+
+def _totals(counts: dict) -> DashboardTotals:
+    return DashboardTotals(
+        orders=counts["landed"],
+        # Won from anywhere, recovered leads included — the same figure the
+        # day's "Confirmed" tile shows, summed over the month.
+        confirmed=counts["confirmed"],
+        delivered=counts["delivered"],
+    )
+
+
+def _range(
+    date_from: date | None, date_to: date | None
+) -> tuple[date, date, datetime, datetime]:
+    """The chosen Dhaka days, defaulting to today, checked for sense."""
+    today = datetime.now(DHAKA).date()
+    end_day = date_to or today
+    start_day = date_from or end_day
+    if end_day > today:
+        raise HTTPException(status_code=400, detail="That day has not happened yet")
+    if start_day > end_day:
+        raise HTTPException(status_code=400, detail="The range ends before it starts")
+    if (end_day - start_day).days > 366:
+        raise HTTPException(status_code=400, detail="At most a year at a time")
+    start, _ = _dhaka_day(start_day)
+    _, end = _dhaka_day(end_day)
+    return start_day, end_day, start, end
+
+
+@router.get("/dashboard", response_model=DashboardOut)
+async def dashboard(
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
+    session: AsyncSession = Depends(get_session),
+    _user: User = Depends(get_current_user),
+) -> DashboardOut:
+    """The figures the admin home page leads with: the chosen days in detail
+    (today, by default), and the month the range ends in.
+
+    Days are the shop's days, not UTC's: an order at 02:00 in Dhaka belongs to
+    that morning, not to the evening before. Every figure is by the order's
+    creation date and its status now, so a day's numbers keep moving as its
+    orders are worked — which is what a target board wants to show.
+    """
+    start_day, end_day, start, end = _range(date_from, date_to)
+    month_start, month_end = _dhaka_month(end_day)
+    last_month_start, _ = _dhaka_month((month_start - timedelta(days=1)).date())
+
+    period = await _counts(session, start, end)
+    this_month = await _counts(session, month_start, month_end)
+    last_month = await _counts(session, last_month_start, month_start)
+
+    # The five most productive people, from the audit trail. Ranked by orders
+    # confirmed (one credit per order, however many times it was moved), then
+    # by every status change made, so someone who worked the lists without
+    # closing anything still shows up rather than vanishing.
+    confirmed_by = func.count(distinct(OrderEvent.order_id)).filter(
+        OrderEvent.new_status == OrderStatus.confirmed.value
+    )
+    handled = func.count()
+    performer_rows = await session.execute(
+        select(User.id, User.name, User.nickname, confirmed_by, handled)
+        .join(User, User.id == OrderEvent.actor_id)
+        .where(
+            OrderEvent.event_type == "status_changed",
+            OrderEvent.created_at >= start,
+            OrderEvent.created_at < end,
+        )
+        .group_by(User.id)
+        .order_by(confirmed_by.desc(), handled.desc(), User.name)
+        .limit(5)
+    )
+    performers = [
+        Performer(user_id=uid, name=name, nickname=nickname, confirmed=n, handled=h)
+        for uid, name, nickname, n, h in performer_rows
+    ]
+
+    return DashboardOut(
+        date_from=start_day,
+        date_to=end_day,
+        month=f"{end_day.year:04d}-{end_day.month:02d}",
+        this_month=_totals(this_month),
+        last_month=_totals(last_month),
+        period=DashboardPeriod(
+            landed=period["landed"],
+            processing=period["processing"],
+            confirmed=period["confirmed"],
+            no_response=period["no_response"],
+            cancelled=period["cancelled"],
+            manual=period["manual"],
+            leads=period["leads"],
+            leads_processing=period["leads_processing"],
+            leads_confirmed=period["leads_confirmed"],
+        ),
+        performers=performers,
+    )
+
+
+@router.get("/dashboard/activity", response_model=list[ActivityOut])
+async def dashboard_activity(
+    user_id: int,
+    date_from: date | None = Query(None, alias="from"),
+    date_to: date | None = Query(None, alias="to"),
+    session: AsyncSession = Depends(get_session),
+    _user: User = Depends(get_current_user),
+) -> list[ActivityOut]:
+    """The orders one staff member confirmed over the chosen days, newest
+    first: the list behind their number on the performers card."""
+    _, _, start, end = _range(date_from, date_to)
+    rows = await session.execute(
+        select(OrderEvent, Order.customer_name)
+        .join(Order, Order.id == OrderEvent.order_id)
+        .where(
+            OrderEvent.actor_id == user_id,
+            OrderEvent.event_type == "status_changed",
+            OrderEvent.new_status == OrderStatus.confirmed.value,
+            OrderEvent.created_at >= start,
+            OrderEvent.created_at < end,
+        )
+        .order_by(OrderEvent.created_at.desc(), OrderEvent.id.desc())
+        .limit(300)
+    )
+    return [
+        ActivityOut(
+            id=event.id,
+            order_id=event.order_id,
+            order_no=f"NB-{event.order_id}",
+            customer_name=customer_name,
+            event_type=event.event_type,
+            old_status=event.old_status,
+            new_status=event.new_status,
+            note=event.note,
+            created_at=event.created_at,
+        )
+        for event, customer_name in rows
+    ]
+
+
 # Which lists count as "this customer already has an order with us". Incomplete
 # is an abandoned form nobody placed, and a cancelled order is not in progress —
 # neither is worth reading out on a call.
@@ -651,28 +907,25 @@ async def create_manual_order(
     what the toggle at the top of the page picks.
 
     Prices come from the catalogue, never from the request: the browser sends
-    product ids and quantities only.
+    variant ids and quantities only.
     """
     rows = await session.execute(
-        select(Product).where(Product.id.in_([i.product_id for i in payload.items]))
+        select(ProductVariant, Product)
+        .join(Product, Product.id == ProductVariant.product_id)
+        .where(ProductVariant.id.in_([i.variant_id for i in payload.items]))
     )
-    catalogue_rows = {product.id: product for product in rows.scalars()}
-    missing = [i.product_id for i in payload.items if i.product_id not in catalogue_rows]
+    on_sale = {
+        variant.id: catalogue.sellable(product, variant)
+        for variant, product in rows.all()
+    }
+    missing = [i.variant_id for i in payload.items if i.variant_id not in on_sale]
     if missing:
         raise HTTPException(
             status_code=400,
             detail=f"Unknown product id(s): {', '.join(str(m) for m in missing)}",
         )
 
-    items = [
-        OrderItem(
-            product_id=line.product_id,
-            product_name=catalogue_rows[line.product_id].title,
-            unit_price=catalogue_rows[line.product_id].unit_price,
-            quantity=line.quantity,
-        )
-        for line in payload.items
-    ]
+    items = [_line(on_sale[line.variant_id], line.quantity) for line in payload.items]
     total = sum(item.unit_price * item.quantity for item in items)
     units = sum(item.quantity for item in items)
 
@@ -686,7 +939,7 @@ async def create_manual_order(
         address=payload.address.strip(),
         comment=payload.comment.strip(),
         status=status,
-        source=OrderSource.website.value,
+        source=OrderSource.manual.value,
         # The summary columns every existing screen reads. total_amount is
         # authoritative — it is what the customer pays, what Pathao collects
         # and what revenue sums. quantity is the unit count, which is what
@@ -974,7 +1227,7 @@ async def refresh_pathao(
             )
             continue
         try:
-            info = await pathao.order_info(order.pathao_consignment_id)
+            await pathao_sync.refresh_order(session, order, actor_id=user.id)
         except pathao.PathaoError as exc:
             failed.append(
                 PathaoFailure(
@@ -984,17 +1237,6 @@ async def refresh_pathao(
                 )
             )
             continue
-        status = info.raw.get("order_status_slug") or info.order_status or None
-        if status != order.pathao_status:
-            order.pathao_status = status
-            session.add(
-                OrderEvent(
-                    order_id=order.id,
-                    actor_id=user.id,
-                    event_type="pathao_status",
-                    note=status,
-                )
-            )
         refreshed_ids.append(order.id)
     await session.commit()
     return PathaoSendOut(orders=await _load_orders(session, refreshed_ids), failed=failed)

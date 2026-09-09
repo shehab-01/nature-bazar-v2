@@ -138,3 +138,12 @@
     @apply font-sans;
   }
 }
+
+/* Dashboard accent (the performers' bars): validated categorical slot 1,
+   with its own dark-surface step. */
+:root {
+  --dash-1: #2a78d6;
+}
+.dark {
+  --dash-1: #3987e5;
+}

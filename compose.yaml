@@ -57,6 +57,10 @@ services:
         NEXT_PUBLIC_META_PIXEL_ID: ${META_PIXEL_ID:-}
         NEXT_PUBLIC_GTM_ID: ${GTM_ID:-}
     restart: unless-stopped
+    environment:
+      # Opens /legacy, the previous landing page, for a look. Runtime var:
+      # `docker compose up -d --force-recreate web` after changing.
+      SHOW_LEGACY_LANDING: ${SHOW_LEGACY_LANDING:-}
     depends_on:
       - api
     ports:

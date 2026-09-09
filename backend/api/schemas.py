@@ -1,6 +1,13 @@
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from pydantic import BaseModel, ConfigDict, Field, computed_field, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    computed_field,
+    field_validator,
+    model_validator,
+)
 
 from api.config import settings
 from api.models import OrderSource, OrderStatus, UserRole, UserStatus
@@ -23,6 +30,14 @@ class OrderCreate(BaseModel):
     phone: str = Field(min_length=6, max_length=32)
     address: str = Field(min_length=4, max_length=1000)
     quantity: int = Field(default=1, ge=1, le=50)
+    # Which variant the customer picked (the size, on the landing page). Only
+    # the id travels: the name and price are read from that row on the server,
+    # so the browser can never set what an order costs. Absent from the old
+    # storefront, which sells the default variant and nothing else.
+    variant_id: int | None = None
+    # Anything the customer wanted to tell us. Lands in the order's comment,
+    # where staff already read and write notes.
+    note: str = Field(default="", max_length=500)
     # The browser's draft key, when this visit had already autosaved a partial
     # form. It promotes that Incomplete row instead of creating a second one.
     draft_key: str | None = Field(default=None, min_length=8, max_length=64)
@@ -82,6 +97,7 @@ class OrderItemOut(BaseModel):
 
     id: int
     product_id: int | None = None
+    variant_id: int | None = None
     product_name: str
     unit_price: int
     quantity: int
@@ -236,6 +252,68 @@ class PathaoStatusOut(BaseModel):
     error: str | None = None
 
 
+class DashboardTotals(BaseModel):
+    """A month's headline figures."""
+
+    # Landed from the site and from staff.
+    orders: int
+    # Won from anywhere: the site, staff, and recovered leads.
+    confirmed: int
+    # Reported delivered by the courier.
+    delivered: int
+
+
+class DashboardPeriod(BaseModel):
+    """The chosen days' orders by where they stand now, and the leads apart."""
+
+    landed: int
+    # Still exactly where they arrived: nobody has moved them yet.
+    processing: int
+    # From the site, from staff, and leads that were recovered.
+    confirmed: int
+    no_response: int
+    cancelled: int
+    # Taken by staff over a call, WhatsApp or Messenger.
+    manual: int
+    leads: int
+    leads_processing: int
+    leads_confirmed: int
+
+
+class Performer(BaseModel):
+    user_id: int
+    name: str
+    nickname: str | None = None
+    confirmed: int
+    # Every status change they made, confirmations included.
+    handled: int
+
+
+class DashboardOut(BaseModel):
+    date_from: date
+    date_to: date
+    # "2026-09": the month the top row describes — the one date_to falls in.
+    month: str
+    this_month: DashboardTotals
+    last_month: DashboardTotals
+    period: DashboardPeriod
+    performers: list[Performer]
+
+
+class ActivityOut(BaseModel):
+    """One thing a staff member did to an order, for the performer history."""
+
+    id: int
+    order_id: int
+    order_no: str
+    customer_name: str
+    event_type: str
+    old_status: str | None = None
+    new_status: str | None = None
+    note: str | None = None
+    created_at: datetime
+
+
 class OrderStatsOut(BaseModel):
     total: int
     in_progress: int
@@ -262,6 +340,9 @@ class UserOut(BaseModel):
 class UserWithActivityOut(UserOut):
     orders_confirmed: int = 0
     orders_shipped: int = 0
+    # Super admin by server configuration (SUPER_ADMIN_EMAILS): the role is
+    # re-applied on every request, so it cannot be taken away from here.
+    pinned: bool = False
 
 
 class UserUpdate(BaseModel):
@@ -271,59 +352,93 @@ class UserUpdate(BaseModel):
     nickname: str | None = Field(default=None, max_length=40)
 
 
+class VariantOut(BaseModel):
+    """One version of a product, as the admin sees it."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    product_id: int
+    label: str
+    default_quantity: int
+    unit_price: int
+    sku: str
+    is_default: bool
+    image_path: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return f"/media/{self.image_path}" if self.image_path else None
+
+
 class ProductOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     title: str
-    subtitle: str
-    default_quantity: int
-    unit_price: int
-    sku: str
+    description: str
     is_active: bool
     created_at: datetime
     updated_at: datetime
-    # The stored path, e.g. "products/a1b2c3.jpg"; the URL below is what a
-    # client actually fetches.
-    image_path: str | None = None
-
-    @computed_field
-    @property
-    def image_url(self) -> str | None:
-        return f"/media/{self.image_path}" if self.image_path else None
+    variants: list[VariantOut] = []
 
 
-class ProductCreate(BaseModel):
-    title: str = Field(min_length=1, max_length=255)
-    subtitle: str = Field(default="", max_length=2000)
+class VariantSave(BaseModel):
+    """One version as the editor sends it back. With an id it updates that
+    row; without one it is new. Rows the product had that are missing from
+    the list are deleted."""
+
+    id: int | None = None
+    label: str = Field(default="", max_length=120)
     default_quantity: int = Field(default=1, ge=1, le=99)
     unit_price: int = Field(ge=1)
     sku: str = Field(min_length=1, max_length=64)
+    is_default: bool = False
 
 
-class ProductUpdate(BaseModel):
-    title: str | None = Field(default=None, min_length=1, max_length=255)
-    subtitle: str | None = Field(default=None, max_length=2000)
-    default_quantity: int | None = Field(default=None, ge=1, le=99)
-    unit_price: int | None = Field(default=None, ge=1)
-    sku: str | None = Field(default=None, min_length=1, max_length=64)
+class ProductSave(BaseModel):
+    """The whole product as the editor holds it, saved in one go: the name,
+    the versions and the description. A product must have at least one version
+    or there is nothing to sell, and exactly one of them is the default."""
+
+    title: str = Field(min_length=1, max_length=255)
+    description: str = Field(default="", max_length=20000)
+    variants: list[VariantSave] = Field(min_length=1, max_length=50)
+
+    @model_validator(mode="after")
+    def _one_default(self) -> "ProductSave":
+        defaults = [v for v in self.variants if v.is_default]
+        if len(defaults) > 1:
+            raise ValueError("Only one version can be the default")
+        if not defaults:
+            # The editor always marks one; a client that did not gets the
+            # first, which is what a customer would see first anyway.
+            self.variants[0].is_default = True
+        return self
+
+
+class ProductSaveOut(BaseModel):
+    product: ProductOut
+    # The saved versions' ids in the order they were sent, so the browser can
+    # attach a picture to a row that did not exist before this save.
+    variant_ids: list[int]
 
 
 class StorefrontProductOut(BaseModel):
-    """The active product as the public landing page sees it.
+    """What the old storefront sells: the active product's default variant,
+    in the one-product shape that page was written against.
 
     Deliberately narrower than ProductOut: the storefront has no use for row
     ids, timestamps or the active flag, and this endpoint needs no auth.
     """
 
-    model_config = ConfigDict(from_attributes=True)
-
     title: str
-    subtitle: str
+    subtitle: str = ""
     default_quantity: int
     unit_price: int
     sku: str
-    image_path: str | None = None
+    image_path: str | None = Field(default=None, exclude=True)
 
     @computed_field
     @property
@@ -331,12 +446,41 @@ class StorefrontProductOut(BaseModel):
         return f"/media/{self.image_path}" if self.image_path else None
 
 
-class ManualOrderItem(BaseModel):
-    """One line of a manually taken order. Only the product and how many —
-    the price is read from the catalogue server-side, never sent by the
-    browser."""
+class StorefrontVariantOut(BaseModel):
+    """One entry in the landing page's size picker."""
 
-    product_id: int
+    id: int
+    # The product and the size together, which is what the heading, the
+    # picker and the order all show.
+    title: str
+    label: str
+    default_quantity: int
+    unit_price: int
+    sku: str
+    is_default: bool = False
+    image_path: str | None = Field(default=None, exclude=True)
+
+    @computed_field
+    @property
+    def image_url(self) -> str | None:
+        return f"/media/{self.image_path}" if self.image_path else None
+
+
+class StorefrontListingOut(BaseModel):
+    """The landing page's whole offer: the active product, its description and
+    the variants to choose between, the default first."""
+
+    title: str
+    description: str
+    variants: list[StorefrontVariantOut]
+
+
+class ManualOrderItem(BaseModel):
+    """One line of a manually taken order. Only which variant and how many —
+    the name and price are read from the catalogue server-side, never sent by
+    the browser."""
+
+    variant_id: int
     quantity: int = Field(default=1, ge=1, le=99)
 
 

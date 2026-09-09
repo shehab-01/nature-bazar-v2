@@ -1,22 +1,42 @@
 import { CURRENCY, type TrackedItem } from "@/lib/tracking";
 
-/** A catalogue row as the admin sees it. */
-export type Product = {
+/** One version of a product — a size, a pack — as the admin sees it. */
+export type Variant = {
   id: number;
-  title: string;
-  subtitle: string;
+  productId: number;
+  /** "২ কেজি". Empty on rows from before versions existed. */
+  label: string;
   imageUrl: string | null;
   defaultQuantity: number;
   unitPrice: number;
   sku: string;
+  isDefault: boolean;
+};
+
+/** A catalogue row as the admin sees it: the group, with its versions. */
+export type Product = {
+  id: number;
+  title: string;
+  description: string;
   isActive: boolean;
+  variants: Variant[];
   createdAt: string;
   updatedAt: string;
 };
 
 /**
- * The active product as the storefront sees it — no row id, no timestamps.
- * This is what prices the order table and feeds the analytics events.
+ * The name an order, the picker and the page heading show: the product and
+ * its size, or just the product on a version that has no label. Mirrors
+ * catalogue.variant_title on the API, so the admin previews what the order
+ * will record.
+ */
+export function variantTitle(productTitle: string, label: string): string {
+  return label ? `${productTitle} — ${label}` : productTitle;
+}
+
+/**
+ * What the old storefront sells — no row id, no timestamps. This is what
+ * prices its order table and feeds its analytics events.
  */
 export type StorefrontProduct = {
   title: string;
@@ -28,26 +48,30 @@ export type StorefrontProduct = {
 };
 
 /**
- * What the landing page falls back to when the API cannot be reached.
- *
- * The storefront is the only page that earns money, so it must render and take
- * orders even with the API down — the order form fails loudly on submit, which
- * is far better than a blank page. These values mirror the seed row in
- * migration 0011 and the PRODUCT_* defaults in the API's config.
+ * One entry in the landing page's size picker. A StorefrontProduct so the
+ * success card and the analytics helpers take it as they are, plus the id the
+ * order sends back so the API prices the size that was chosen.
  */
-export const FALLBACK_PRODUCT: StorefrontProduct = {
-  title:
-    "ইলিশের আচার ২০০ গ্রাম, গরুর মাংস আচার ২০০ গ্রাম, এবং চেপা শুটকির আচার ২০০ গ্রাম, কম্বো",
-  subtitle: "",
-  imageUrl: null,
-  defaultQuantity: 1,
-  unitPrice: 1490,
-  sku: "combo-1490",
+export type StorefrontVariant = StorefrontProduct & {
+  id: number;
+  label: string;
+  isDefault: boolean;
 };
 
-/** The product image, or the bundled artwork when none has been uploaded. */
+/** The landing page's whole offer: the active product and its sizes. */
+export type StorefrontListing = {
+  title: string;
+  description: string;
+  variants: StorefrontVariant[];
+};
+
+/**
+ * The product image, or the logo when none has been uploaded. Callers that
+ * frame the picture check imageUrl themselves, since the logo wants a dark
+ * ground and room around it rather than a photo's edge-to-edge crop.
+ */
 export function productImage(product: StorefrontProduct): string {
-  return product.imageUrl ?? "/order-item.png";
+  return product.imageUrl ?? "/logo.png";
 }
 
 /**

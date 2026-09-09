@@ -10,7 +10,6 @@ import {
 import { ApiError } from "@/lib/http";
 import { cleanPhoneInput, toBdMobile } from "@/lib/phone";
 import {
-  forgetLastOrder,
   onLastOrderChange,
   readLastOrder,
   rememberOrder,
@@ -139,7 +138,10 @@ export function Storefront({ product }: { product: StorefrontProduct }) {
       rememberOrder(placed);
       setLastOrder(placed);
       setFresh(true);
-      orderSectionRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      orderSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
       trackPurchase({
         items,
         transactionId: order.orderNo,
@@ -161,7 +163,7 @@ export function Storefront({ product }: { product: StorefrontProduct }) {
             ? "throttled"
             : status === 422
               ? "phone"
-              : "failed"
+              : "failed",
       );
     } finally {
       setSubmitting(false);
@@ -206,7 +208,7 @@ export function Storefront({ product }: { product: StorefrontProduct }) {
           <a
             className="order-now"
             href="#order"
-            onClick={() => trackAddToCart()}
+            onClick={() => trackAddToCart(items)}
           >
             অর্ডার করুন
           </a>
@@ -247,97 +249,88 @@ export function Storefront({ product }: { product: StorefrontProduct }) {
             order={lastOrder}
             product={product}
             fresh={fresh}
-            onOrderAnother={() => {
-              // Ordering for someone else: the same number is still refused
-              // by the API's cooldown, so this only helps a different one.
-              forgetLastOrder();
-              setLastOrder(null);
-              setFresh(false);
-              setSubmitError(null);
-              draft.restart();
-            }}
           />
         ) : (
           <>
-        <h2 className="eyebrow">অর্ডার করতে নিচের ফর্মটি ফিলআপ করুন</h2>
+            <h2 className="eyebrow">অর্ডার করতে নিচের ফর্মটি ফিলআপ করুন</h2>
 
-          <form
-            ref={formRef}
-            onSubmit={handleSubmit}
-            onFocusCapture={handleFormFocus}
-            onInput={draft.onFormInput}
-            onBlurCapture={draft.onFieldBlur}
-          >
-            <label>
-              নাম
-              <input
-                required
-                name="name"
-                maxLength={120}
-                placeholder="আপনার নাম লিখুন"
-              />
-            </label>
-            <label>
-              ফোন নাম্বার
-              <input
-                required
-                name="phone"
-                type="tel"
-                inputMode="numeric"
-                autoComplete="tel"
-                maxLength={14}
-                value={phoneValue}
-                onChange={(e) => {
-                  setPhoneValue(cleanPhoneInput(e.target.value));
-                  if (submitError === "phone") setSubmitError(null);
-                }}
-                aria-invalid={submitError === "phone" || undefined}
-                placeholder="01XXXXXXXXX"
-              />
-            </label>
-            <label>
-              ঠিকানা
-              <textarea
-                required
-                name="address"
-                rows={3}
-                minLength={4}
-                maxLength={1000}
-                placeholder="আপনার সম্পূর্ণ ঠিকানা লিখুন"
-              />
-            </label>
-            {submitError === "phone" && (
-              <p className="form-error">
-                সঠিক মোবাইল নাম্বার দিন — ১১ ডিজিট, 01 দিয়ে শুরু (যেমন
-                01712345678)।
-              </p>
-            )}
-            {submitError === "cooldown" && (
-              <p className="form-error">
-                এই নাম্বার থেকে ইতিমধ্যে একটি অর্ডার করা হয়েছে। আমাদের প্রতিনিধি
-                শিগগিরই আপনার সাথে যোগাযোগ করবেন। নতুন অর্ডারের জন্য ২৪ ঘণ্টা পর
-                আবার চেষ্টা করুন।
-              </p>
-            )}
-            {submitError === "throttled" && (
-              <p className="form-error">
-                একসাথে অনেকবার চেষ্টা করা হয়েছে। অনুগ্রহ করে কয়েক মিনিট পর আবার
-                চেষ্টা করুন।
-              </p>
-            )}
-            {submitError === "failed" && (
-              <p className="form-error">
-                দুঃখিত, অর্ডারটি জমা দেওয়া যায়নি। একটু পরে আবার চেষ্টা করুন।
-              </p>
-            )}
-            <button type="submit" disabled={submitting}>
-              {submitting ? "অর্ডার পাঠানো হচ্ছে…" : "অর্ডার কনফার্ম করুন"}{" "}
-              <span>→</span>
-            </button>
-            <small className="form-note">
-              ক্যাশ অন ডেলিভারি · সারা বাংলাদেশে ফ্রি ডেলিভারি
-            </small>
-          </form>
+            <form
+              ref={formRef}
+              onSubmit={handleSubmit}
+              onFocusCapture={handleFormFocus}
+              onInput={draft.onFormInput}
+              onBlurCapture={draft.onFieldBlur}
+            >
+              <label>
+                নাম
+                <input
+                  required
+                  name="name"
+                  maxLength={120}
+                  placeholder="আপনার নাম লিখুন"
+                />
+              </label>
+              <label>
+                ফোন নাম্বার
+                <input
+                  required
+                  name="phone"
+                  type="tel"
+                  inputMode="numeric"
+                  autoComplete="tel"
+                  maxLength={14}
+                  value={phoneValue}
+                  onChange={(e) => {
+                    setPhoneValue(cleanPhoneInput(e.target.value));
+                    if (submitError === "phone") setSubmitError(null);
+                  }}
+                  aria-invalid={submitError === "phone" || undefined}
+                  placeholder="01XXXXXXXXX"
+                />
+              </label>
+              <label>
+                ঠিকানা
+                <textarea
+                  required
+                  name="address"
+                  rows={3}
+                  minLength={4}
+                  maxLength={1000}
+                  placeholder="আপনার সম্পূর্ণ ঠিকানা লিখুন"
+                />
+              </label>
+              {submitError === "phone" && (
+                <p className="form-error">
+                  সঠিক মোবাইল নাম্বার দিন — ১১ ডিজিট, 01 দিয়ে শুরু (যেমন
+                  01712345678)।
+                </p>
+              )}
+              {submitError === "cooldown" && (
+                <p className="form-error">
+                  এই নাম্বার থেকে ইতিমধ্যে একটি অর্ডার করা হয়েছে। আমাদের
+                  প্রতিনিধি শিগগিরই আপনার সাথে যোগাযোগ করবেন। নতুন অর্ডারের জন্য
+                  ২৪ ঘণ্টা পর আবার চেষ্টা করুন।
+                </p>
+              )}
+              {submitError === "throttled" && (
+                <p className="form-error">
+                  একসাথে অনেকবার চেষ্টা করা হয়েছে। অনুগ্রহ করে কয়েক মিনিট পর
+                  আবার চেষ্টা করুন।
+                </p>
+              )}
+              {submitError === "failed" && (
+                <p className="form-error">
+                  দুঃখিত, অর্ডারটি জমা দেওয়া যায়নি। একটু পরে আবার চেষ্টা করুন।
+                </p>
+              )}
+              <button type="submit" disabled={submitting}>
+                {submitting ? "অর্ডার পাঠানো হচ্ছে…" : "অর্ডার কনফার্ম করুন"}{" "}
+                <span>→</span>
+              </button>
+              <small className="form-note">
+                ক্যাশ অন ডেলিভারি · সারা বাংলাদেশে ফ্রি ডেলিভারি
+              </small>
+            </form>
           </>
         )}
       </section>
@@ -390,7 +383,7 @@ export function Storefront({ product }: { product: StorefrontProduct }) {
         <a
           className="checkout-button"
           href="#order"
-          onClick={() => trackAddToCart()}
+          onClick={() => trackAddToCart(items)}
         >
           <span className="checkout-lock">🔒</span> অর্ডার করুন{" "}
           <span>১,৪৯০.০০৳</span>

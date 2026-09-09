@@ -15,15 +15,18 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ROLE_LABELS, type TeamMember, type UserStatus } from "@/lib/team";
+import { ROLE_LABELS, type TeamMember,
+  type UserRole, type UserStatus } from "@/lib/team";
 
 export function getTeamColumns({
   currentUserId,
   onStatusChange,
+  onRoleChange,
   onEditNickname,
 }: {
   currentUserId: number;
   onStatusChange: (id: number, status: UserStatus) => void;
+  onRoleChange: (id: number, role: UserRole) => void;
   onEditNickname: (member: TeamMember) => void;
 }): ColumnDef<TeamMember>[] {
   return [
@@ -152,9 +155,13 @@ export function getTeamColumns({
         // Suspending is what could lock someone out, so it stays off limits
         // for super admins and for your own account. A nickname is only a
         // label, so anyone on the team can be given one.
-        const canChangeAccess =
-          row.original.role !== "super_admin" &&
-          row.original.id !== currentUserId;
+        const member = row.original;
+        const isSelf = member.id === currentUserId;
+        const canChangeAccess = member.role !== "super_admin" && !isSelf;
+        // Anyone but yourself can be promoted; a super admin can be made
+        // staff again unless the server configuration pins the role. The
+        // API also refuses to demote the last super admin.
+        const canChangeRole = !isSelf && !(member.role === "super_admin" && member.pinned);
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -168,6 +175,21 @@ export function getTeamColumns({
               <DropdownMenuItem onClick={() => onEditNickname(row.original)}>
                 {row.original.nickname ? "Change nickname" : "Set nickname"}
               </DropdownMenuItem>
+              {canChangeRole && <DropdownMenuSeparator />}
+              {canChangeRole &&
+                (member.role === "super_admin" ? (
+                  <DropdownMenuItem
+                    onClick={() => onRoleChange(member.id, "staff")}
+                  >
+                    Make order staff
+                  </DropdownMenuItem>
+                ) : (
+                  <DropdownMenuItem
+                    onClick={() => onRoleChange(member.id, "super_admin")}
+                  >
+                    Make super admin
+                  </DropdownMenuItem>
+                ))}
               {canChangeAccess && <DropdownMenuSeparator />}
               {canChangeAccess &&
                 (row.original.status === "active" ? (

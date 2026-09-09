@@ -14,6 +14,8 @@ export type TeamMember = {
   lastActiveAt: string | null;
   ordersConfirmed: number;
   ordersShipped: number;
+  /** Super admin by server configuration; the role cannot be changed here. */
+  pinned: boolean;
 };
 
 export const ROLE_LABELS: Record<UserRole, string> = {

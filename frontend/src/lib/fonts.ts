@@ -1,4 +1,4 @@
-import { Manrope, Noto_Sans_Bengali } from "next/font/google";
+import { Hind_Siliguri, Manrope, Noto_Sans_Bengali } from "next/font/google";
 
 /**
  * Manrope, self-hosted by next/font: the files are fetched at build time and
@@ -27,5 +27,21 @@ export const bengali = Noto_Sans_Bengali({
   subsets: ["bengali"],
   display: "swap",
   variable: "--font-bengali",
+  preload: false,
+});
+
+/**
+ * Hind Siliguri carries the landing page, Latin and Bengali alike: one face
+ * for the whole page rather than Manrope for the digits and Noto for the
+ * words. Static cuts only, 300–700, so the landing CSS never asks for more
+ * than 700 (the browser would fake anything heavier).
+ *
+ * Not preloaded, for the same reason as Noto: only the landing page uses it.
+ */
+export const hindSiliguri = Hind_Siliguri({
+  weight: ["300", "400", "500", "600", "700"],
+  subsets: ["bengali", "latin"],
+  display: "swap",
+  variable: "--font-hind",
   preload: false,
 });

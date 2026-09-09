@@ -13,6 +13,7 @@ from api.routers.auth import router as auth_router
 from api.routers.orders import router as orders_router
 from api.routers.products import public_router as storefront_router
 from api.routers.products import router as products_router
+from api.services import pathao_sync
 from api.routers.system import router as system_router
 from api.routers.users import router as users_router
 
@@ -20,7 +21,9 @@ from api.routers.users import router as users_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     monitoring.start()
+    pathao_sync.start()
     yield
+    await pathao_sync.stop()
     await monitoring.stop()
     await engine.dispose()
 

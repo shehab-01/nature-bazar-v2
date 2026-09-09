@@ -27,12 +27,15 @@ import {
 } from "@/lib/api";
 import { cleanPhoneInput, toBdMobile } from "@/lib/phone";
 import type { Order } from "@/lib/orders";
-import type { Product } from "@/lib/products";
+import { variantTitle, type Variant } from "@/lib/products";
 import { notifyOrdersChanged } from "@/lib/use-order-counts";
 import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
 import { cn } from "@/lib/utils";
 
-type CartLine = { product: Product; quantity: number };
+// A version with its full name attached: what staff pick from and what the
+// order line will record.
+type Sellable = Variant & { title: string };
+type CartLine = { variant: Sellable; quantity: number };
 
 const NO_LOOKUP: PhoneLookup = { orders: [], incomplete: [] };
 
@@ -49,7 +52,7 @@ export default function ManualOrderPage() {
   const [address, setAddress] = React.useState("");
   const [comment, setComment] = React.useState("");
 
-  const [products, setProducts] = React.useState<Product[]>([]);
+  const [products, setProducts] = React.useState<Sellable[]>([]);
   const [productSearch, setProductSearch] = React.useState("");
   const [cart, setCart] = React.useState<CartLine[]>([]);
 
@@ -65,8 +68,19 @@ export default function ManualOrderPage() {
   const [viewing, setViewing] = React.useState<Order | null>(null);
 
   React.useEffect(() => {
+    // Every version of every product, flattened: a phone order can be for
+    // anything in the catalogue, live or not.
     listProducts()
-      .then(setProducts)
+      .then((groups) =>
+        setProducts(
+          groups.flatMap((group) =>
+            group.variants.map((variant) => ({
+              ...variant,
+              title: variantTitle(group.title, variant.label),
+            }))
+          )
+        )
+      )
       .catch((err) =>
         setError(err instanceof Error ? err.message : "Failed to load products")
       );
@@ -108,31 +122,31 @@ export default function ManualOrderPage() {
     };
   }, [normalisedPhone]);
 
-  const addToCart = (product: Product) => {
+  const addToCart = (variant: Sellable) => {
     setCart((lines) => {
-      const existing = lines.find((line) => line.product.id === product.id);
+      const existing = lines.find((line) => line.variant.id === variant.id);
       if (existing) {
         return lines.map((line) =>
-          line.product.id === product.id
+          line.variant.id === variant.id
             ? { ...line, quantity: line.quantity + 1 }
             : line
         );
       }
-      return [...lines, { product, quantity: 1 }];
+      return [...lines, { variant, quantity: 1 }];
     });
   };
 
-  const setQuantity = (productId: number, quantity: number) => {
+  const setQuantity = (variantId: number, quantity: number) => {
     if (quantity < 1) return;
     setCart((lines) =>
       lines.map((line) =>
-        line.product.id === productId ? { ...line, quantity } : line
+        line.variant.id === variantId ? { ...line, quantity } : line
       )
     );
   };
 
-  const removeLine = (productId: number) =>
-    setCart((lines) => lines.filter((line) => line.product.id !== productId));
+  const removeLine = (variantId: number) =>
+    setCart((lines) => lines.filter((line) => line.variant.id !== variantId));
 
   // Anything typed or added counts as work in progress. Not while saving: the
   // form clears itself on success, and prompting mid-submit would be absurd.
@@ -154,7 +168,7 @@ export default function ManualOrderPage() {
   };
 
   const total = cart.reduce(
-    (sum, line) => sum + line.product.unitPrice * line.quantity,
+    (sum, line) => sum + line.variant.unitPrice * line.quantity,
     0
   );
 
@@ -186,7 +200,7 @@ export default function ManualOrderPage() {
         comment: comment.trim(),
         approved,
         items: cart.map((line) => ({
-          productId: line.product.id,
+          variantId: line.variant.id,
           quantity: line.quantity,
         })),
       });
@@ -396,17 +410,17 @@ export default function ManualOrderPage() {
                   ) : (
                     <ul className="divide-y">
                       {cart.map((line) => (
-                        <li key={line.product.id} className="p-3">
+                        <li key={line.variant.id} className="p-3">
                           <div className="flex items-start gap-2">
                             <span className="min-w-0 flex-1 truncate text-sm font-medium">
-                              {line.product.title}
+                              {line.variant.title}
                             </span>
                             <Button
                               variant="ghost"
                               size="icon"
                               className="size-7 shrink-0"
                               aria-label="Remove"
-                              onClick={() => removeLine(line.product.id)}
+                              onClick={() => removeLine(line.variant.id)}
                             >
                               <Trash2 className="size-4 text-destructive" />
                             </Button>
@@ -419,7 +433,7 @@ export default function ManualOrderPage() {
                               aria-label="Decrease quantity"
                               disabled={line.quantity <= 1}
                               onClick={() =>
-                                setQuantity(line.product.id, line.quantity - 1)
+                                setQuantity(line.variant.id, line.quantity - 1)
                               }
                             >
                               <Minus className="size-3" />
@@ -430,7 +444,7 @@ export default function ManualOrderPage() {
                               value={line.quantity}
                               onChange={(e) =>
                                 setQuantity(
-                                  line.product.id,
+                                  line.variant.id,
                                   Number(e.target.value.replace(/\D/g, "")) || 1
                                 )
                               }
@@ -441,13 +455,13 @@ export default function ManualOrderPage() {
                               className="size-7"
                               aria-label="Increase quantity"
                               onClick={() =>
-                                setQuantity(line.product.id, line.quantity + 1)
+                                setQuantity(line.variant.id, line.quantity + 1)
                               }
                             >
                               <Plus className="size-3" />
                             </Button>
                             <span className="ml-auto text-sm font-semibold tabular-nums">
-                              ৳ {line.product.unitPrice * line.quantity}
+                              ৳ {line.variant.unitPrice * line.quantity}
                             </span>
                           </div>
                         </li>

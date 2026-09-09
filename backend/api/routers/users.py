@@ -3,8 +3,9 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.auth import require_super_admin
+from api.config import settings
 from api.db import get_session
-from api.models import OrderEvent, User, UserStatus
+from api.models import OrderEvent, User, UserRole, UserStatus
 from api.schemas import UserUpdate, UserWithActivityOut
 
 router = APIRouter(
@@ -35,10 +36,11 @@ async def list_users(
     return [
         UserWithActivityOut(
             **UserWithActivityOut.model_validate(user).model_dump(
-                exclude={"orders_confirmed", "orders_shipped"}
+                exclude={"orders_confirmed", "orders_shipped", "pinned"}
             ),
             orders_confirmed=conf,
             orders_shipped=comp,
+            pinned=user.email in settings.super_admin_emails,
         )
         for user, conf, comp in rows
     ]
@@ -66,7 +68,29 @@ async def update_user(
 
     if payload.status is not None:
         user.status = payload.status
-    if payload.role is not None:
+    if payload.role is not None and payload.role != user.role:
+        if payload.role == UserRole.staff:
+            # The config re-promotes these on their next request, so a
+            # demotion here would silently undo itself.
+            if user.email in settings.super_admin_emails:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This account is a super admin by server configuration "
+                    "(SUPER_ADMIN_EMAILS) and cannot be changed here",
+                )
+            # Never leave the team with nobody able to manage it.
+            others = await session.scalar(
+                select(func.count()).where(
+                    User.role == UserRole.super_admin,
+                    User.status == UserStatus.active,
+                    User.id != user.id,
+                )
+            )
+            if not others:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Cannot remove the last super admin",
+                )
         user.role = payload.role
     if payload.nickname is not None:
         nickname = payload.nickname.strip()

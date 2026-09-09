@@ -3,7 +3,7 @@
 import Image from "next/image";
 import * as React from "react";
 
-import { ProductDialog } from "@/components/admin/products/product-dialog";
+import { ProductEditor } from "@/components/admin/products/product-editor";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,27 +16,32 @@ import {
 } from "@/components/ui/table";
 import {
   activateProduct,
-  createProduct,
   deleteProduct,
   listProducts,
-  updateProduct,
-  uploadProductImage,
-  type ProductInput,
+  saveProduct,
+  uploadVariantImage,
+  type ProductSaveInput,
 } from "@/lib/api";
 import type { Product } from "@/lib/products";
 
 /**
- * The catalogue. Exactly one product is active at a time — that is the one the
- * landing page shows and the one every new order is priced against — so the
- * table leads with which that is rather than burying it in a column.
+ * The catalogue. A product is a group — a name and a description — and its
+ * versions are what actually sell: each with its own size, price and picture.
+ * Exactly one product is live at a time; the landing page shows it with all
+ * of its versions, the default one selected.
+ *
+ * The page itself only reads. Everything about a product — name, versions,
+ * default, description — is changed in one editor dialog and saved together.
  */
 export default function ProductsPage() {
   const [products, setProducts] = React.useState<Product[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
-  const [editing, setEditing] = React.useState<Product | null>(null);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [busyId, setBusyId] = React.useState<number | null>(null);
+  const [busy, setBusy] = React.useState(false);
+  const [editor, setEditor] = React.useState<{
+    open: boolean;
+    editing: Product | null;
+  }>({ open: false, editing: null });
 
   const refresh = React.useCallback(async () => {
     try {
@@ -54,74 +59,66 @@ export default function ProductsPage() {
   }, [refresh]);
 
   /**
-   * Save the text fields, then the image if one was picked. A new product has
-   * to exist before its image can be attached, since the upload endpoint is
-   * addressed by row id.
+   * One request saves the name, the versions and the description; the
+   * pictures follow, one upload per row that picked a file, addressed by the
+   * ids the save answered with. A picture that fails to upload leaves the
+   * product saved and says so, rather than losing everything typed.
    */
-  const handleSave = React.useCallback(
-    async (values: ProductInput, image: File | null) => {
-      const saved = editing
-        ? await updateProduct(editing.id, values)
-        : await createProduct(values);
-      if (image) await uploadProductImage(saved.id, image);
-      await refresh();
-    },
-    [editing, refresh]
-  );
-
-  const handleActivate = React.useCallback(async (id: number) => {
-    setBusyId(id);
-    setError(null);
+  const handleSave = async (input: ProductSaveInput, images: (File | null)[]) => {
+    const { product, variantIds } = await saveProduct(
+      input,
+      editor.editing?.id ?? null
+    );
     try {
-      setProducts(await activateProduct(id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Could not activate");
+      for (const [index, file] of images.entries()) {
+        if (file) await uploadVariantImage(product.id, variantIds[index], file);
+      }
     } finally {
-      setBusyId(null);
+      await refresh();
     }
-  }, []);
-
-  const handleDelete = React.useCallback(
-    async (product: Product) => {
-      if (
-        !window.confirm(
-          `Delete "${product.title}"? Past orders keep the name and price they recorded.`
-        )
-      ) {
-        return;
-      }
-      setBusyId(product.id);
-      setError(null);
-      try {
-        await deleteProduct(product.id);
-        await refresh();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not delete");
-      } finally {
-        setBusyId(null);
-      }
-    },
-    [refresh]
-  );
-
-  const openAdd = () => {
-    setEditing(null);
-    setDialogOpen(true);
   };
 
-  const openEdit = (product: Product) => {
-    setEditing(product);
-    setDialogOpen(true);
+  const run = async (fallback: string, action: () => Promise<void>) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await action();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : fallback);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activate = (product: Product) =>
+    run("Could not make this product live", async () => {
+      setProducts(await activateProduct(product.id));
+    });
+
+  const remove = (product: Product) => {
+    if (
+      !window.confirm(
+        `Delete "${product.title}" and all its versions? Past orders keep the name and price they recorded.`
+      )
+    ) {
+      return;
+    }
+    run("Could not delete", async () => {
+      await deleteProduct(product.id);
+      await refresh();
+    });
   };
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <p className="text-sm text-muted-foreground">
-          One product is live at a time. Activating another swaps what the
-          landing page sells immediately.
+          One product is live at a time, with all of its versions on the
+          landing page. Making another live swaps the page immediately.
         </p>
-        <Button onClick={openAdd}>Add product</Button>
+        <Button onClick={() => setEditor({ open: true, editing: null })}>
+          Add product
+        </Button>
       </div>
 
       {error && (
@@ -130,115 +127,126 @@ export default function ProductsPage() {
         </div>
       )}
 
-      <div className="rounded-xl border bg-card p-4 shadow-xs">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-16">Image</TableHead>
-              <TableHead>Product</TableHead>
-              <TableHead className="w-24 text-right">Price</TableHead>
-              <TableHead className="w-20 text-right">Qty</TableHead>
-              <TableHead className="w-32">SKU</TableHead>
-              <TableHead className="w-24">Status</TableHead>
-              <TableHead className="w-56 text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {loading ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  Loading…
-                </TableCell>
-              </TableRow>
-            ) : products.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={7} className="h-24 text-center">
-                  No products yet. Add one to start selling.
-                </TableCell>
-              </TableRow>
-            ) : (
-              products.map((product) => (
-                <TableRow key={product.id}>
-                  <TableCell>
-                    {product.imageUrl ? (
-                      <Image
-                        src={product.imageUrl}
-                        alt=""
-                        width={40}
-                        height={40}
-                        unoptimized
-                        className="size-10 rounded-md border object-cover"
-                      />
-                    ) : (
-                      <div className="size-10 rounded-md border border-dashed" />
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="font-medium">{product.title}</div>
-                    {product.subtitle && (
-                      <div className="text-xs text-muted-foreground">
-                        {product.subtitle}
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    ৳ {product.unitPrice}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    {product.defaultQuantity}
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {product.sku}
-                  </TableCell>
-                  <TableCell>
-                    {product.isActive ? (
-                      <Badge>Live</Badge>
-                    ) : (
-                      <Badge variant="secondary">Draft</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      {!product.isActive && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={busyId !== null}
-                          onClick={() => handleActivate(product.id)}
-                        >
-                          Activate
-                        </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(product)}
-                      >
-                        Edit
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        // The live product has no replacement until another is
-                        // activated, so the API refuses this too.
-                        disabled={product.isActive || busyId !== null}
-                        onClick={() => handleDelete(product)}
-                      >
-                        Delete
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      {loading ? (
+        <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground shadow-xs">
+          Loading…
+        </div>
+      ) : products.length === 0 ? (
+        <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground shadow-xs">
+          No products yet. Add one to start selling.
+        </div>
+      ) : (
+        products.map((product) => (
+          <section
+            key={product.id}
+            className="rounded-xl border bg-card p-4 shadow-xs"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <h2 className="text-base font-semibold">{product.title}</h2>
+                  {product.isActive ? (
+                    <Badge>Live</Badge>
+                  ) : (
+                    <Badge variant="secondary">Not live</Badge>
+                  )}
+                </div>
+                <p className="mt-1 line-clamp-2 whitespace-pre-line text-xs text-muted-foreground">
+                  {product.description || "No description yet."}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-1">
+                {!product.isActive && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={busy}
+                    onClick={() => activate(product)}
+                  >
+                    Make live
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditor({ open: true, editing: product })}
+                >
+                  Edit
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  // The live product has no replacement until another is
+                  // made live, so the API refuses this too.
+                  disabled={busy || product.isActive}
+                  onClick={() => remove(product)}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
 
-      <ProductDialog
-        product={editing}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
+            <Table className="mt-3">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-14">Image</TableHead>
+                  <TableHead>Version</TableHead>
+                  <TableHead className="w-24 text-right">Price</TableHead>
+                  <TableHead className="w-16 text-right">Qty</TableHead>
+                  <TableHead className="w-36">SKU</TableHead>
+                  <TableHead className="w-24" />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {product.variants.map((variant) => (
+                  <TableRow key={variant.id}>
+                    <TableCell>
+                      {variant.imageUrl ? (
+                        <Image
+                          src={variant.imageUrl}
+                          alt=""
+                          width={40}
+                          height={40}
+                          unoptimized
+                          className="size-10 rounded-md border object-cover"
+                        />
+                      ) : (
+                        <div className="size-10 rounded-md border border-dashed" />
+                      )}
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {variant.label || (
+                        <span className="text-muted-foreground">
+                          (no size — shows as the product name)
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      ৳ {variant.unitPrice}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {variant.defaultQuantity}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs">
+                      {variant.sku}
+                    </TableCell>
+                    <TableCell>
+                      {variant.isDefault && (
+                        <Badge variant="outline">Default</Badge>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </section>
+        ))
+      )}
+
+      <ProductEditor
+        product={editor.editing}
+        open={editor.open}
+        onOpenChange={(open) => setEditor((e) => ({ ...e, open }))}
         onSave={handleSave}
       />
     </div>

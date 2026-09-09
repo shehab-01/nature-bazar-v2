@@ -22,16 +22,6 @@ export type TrackedItem = {
   quantity: number;
 };
 
-export const PRODUCT: TrackedItem = {
-  id: "combo-1490",
-  item_id: "combo-1490",
-  item_name: "ইলিশ, গরুর মাংস ও চেপা শুটকির আচার কম্বো",
-  currency: CURRENCY,
-  price: 1490,
-  item_category: "সারা বাংলাদেশে ফ্রি ডেলিভারি",
-  quantity: 1,
-};
-
 export type UserData = {
   first_name: string;
   phone: string;
@@ -108,7 +98,7 @@ function pixelContents(items: TrackedItem[]) {
   };
 }
 
-export function trackViewItem(items: TrackedItem[] = [PRODUCT]) {
+export function trackViewItem(items: TrackedItem[]) {
   const value = cartValue(items);
   push({
     event: "view_item",
@@ -123,7 +113,7 @@ export function trackViewItem(items: TrackedItem[] = [PRODUCT]) {
   });
 }
 
-export function trackAddToCart(items: TrackedItem[] = [PRODUCT]) {
+export function trackAddToCart(items: TrackedItem[]) {
   const value = cartValue(items);
   push({
     event: "add_to_cart",
@@ -134,7 +124,7 @@ export function trackAddToCart(items: TrackedItem[] = [PRODUCT]) {
   fbq("track", "AddToCart", { ...pixelContents(items), value });
 }
 
-export function trackViewCart(items: TrackedItem[] = [PRODUCT]) {
+export function trackViewCart(items: TrackedItem[]) {
   push({
     event: "view_cart",
     pageType: "cart",
@@ -143,7 +133,7 @@ export function trackViewCart(items: TrackedItem[] = [PRODUCT]) {
   // Meta has no standard cart-view event; dataLayer only.
 }
 
-export function trackBeginCheckout(items: TrackedItem[] = [PRODUCT]) {
+export function trackBeginCheckout(items: TrackedItem[]) {
   const value = cartValue(items);
   push({
     event: "begin_checkout",
@@ -159,11 +149,11 @@ export function trackBeginCheckout(items: TrackedItem[] = [PRODUCT]) {
 
 export function trackPurchase(input: {
   transactionId: string;
-  items?: TrackedItem[];
+  items: TrackedItem[];
   shipping?: number;
   user: Partial<UserData>;
 }) {
-  const items = input.items ?? [PRODUCT];
+  const items = input.items;
   const shipping = input.shipping ?? SHIPPING;
   const value = cartValue(items) + shipping;
   const user_data: UserData = {

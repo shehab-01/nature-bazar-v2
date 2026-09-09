@@ -93,16 +93,19 @@ export const STATUS_BADGE_CLASS: Record<OrderStatus, string> = {
   history: "bg-stone-100 text-stone-700 dark:bg-stone-900 dark:text-stone-300",
 };
 
-export type OrderSource = "website" | "incomplete";
+export type OrderSource = "website" | "incomplete" | "manual";
 
 export const ORDER_SOURCE_LABELS: Record<OrderSource, string> = {
   website: "Website",
   incomplete: "Incomplete",
+  // Taken by staff from a call, WhatsApp or Messenger.
+  manual: "Manual",
 };
 
 export const SOURCE_BADGE_CLASS: Record<OrderSource, string> = {
   website: "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300",
   incomplete: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+  manual: "bg-violet-100 text-violet-800 dark:bg-violet-950 dark:text-violet-300",
 };
 
 /**

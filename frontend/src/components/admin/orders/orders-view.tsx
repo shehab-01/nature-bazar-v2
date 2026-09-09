@@ -683,6 +683,7 @@ export function OrdersView({
           printed: showFulfilment,
           courier: showFulfilment,
           pathao: showFulfilment,
+          delivery: showFulfilment,
         }}
         storageKey={storageKey}
         getRowId={rowId}

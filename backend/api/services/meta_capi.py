@@ -63,11 +63,11 @@ def build_purchase_event(
     unit_price: int,
     created_at: float | None,
     ctx: ClientContext,
-    # The active product's catalogue id. Falls back to the configured one so a
-    # caller that predates the products table still works.
-    sku: str | None = None,
+    # The sold variant's catalogue id — the same one the browser's Pixel
+    # event carried, so the two sides of the Purchase deduplicate.
+    sku: str,
 ) -> dict:
-    content_id = sku or settings.product_sku
+    content_id = sku
     first_name = customer_name.strip().split()[0].lower() if customer_name.strip() else ""
     user_data: dict = {"country": [_sha256("bd")]}
     if first_name:

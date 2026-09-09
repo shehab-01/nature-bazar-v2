@@ -28,27 +28,50 @@ function FlagCell({ on }: { on: boolean }) {
   );
 }
 
-/** The consignment id as a link to Pathao's tracking page, plus its status. */
+/** The consignment id as a link to Pathao's tracking page. */
 function PathaoCell({ order }: { order: Order }) {
   if (!order.pathaoConsignmentId) {
     return <span className="sr-only">Not sent</span>;
   }
   return (
-    <div className="flex flex-col gap-0.5">
-      <a
-        href={order.pathaoTrackingUrl ?? "#"}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 font-mono text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
-        onClick={(event) => event.stopPropagation()}
-      >
-        {order.pathaoConsignmentId}
-        <ExternalLink className="size-3" />
-      </a>
-      {order.pathaoStatus && (
-        <span className="text-xs text-muted-foreground">{order.pathaoStatus}</span>
-      )}
-    </div>
+    <a
+      href={order.pathaoTrackingUrl ?? "#"}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-1 font-mono text-xs font-medium text-blue-700 underline underline-offset-2 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
+      onClick={(event) => event.stopPropagation()}
+    >
+      {order.pathaoConsignmentId}
+      <ExternalLink className="size-3" />
+    </a>
+  );
+}
+
+// Pathao's own status words, toned by what they mean. Order matters: partial
+// delivery is checked before "deliver" would claim it.
+const DELIVERY_TONES: [RegExp, string][] = [
+  [/partial/, "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"],
+  [/deliver/, "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300"],
+  [/return|cancel/, "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300"],
+];
+
+/**
+ * Where the parcel is, as Pathao last said. Kept current by the API's own
+ * polling, so staff can archive an order before it is delivered and still
+ * see the delivery land later.
+ */
+function DeliveryCell({ order }: { order: Order }) {
+  if (!order.pathaoConsignmentId) {
+    return <span className="text-xs text-muted-foreground">Not sent</span>;
+  }
+  const status = order.pathaoStatus ?? "Pending";
+  const tone =
+    DELIVERY_TONES.find(([re]) => re.test(status.toLowerCase()))?.[1] ??
+    "bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300";
+  return (
+    <Badge variant="secondary" className={cn("font-medium", tone)}>
+      {status.replace(/_/g, " ")}
+    </Badge>
   );
 }
 
@@ -229,6 +252,13 @@ export function getOrderColumns({
       enableSorting: false,
       meta: { label: "Pathao" },
       cell: ({ row }) => <PathaoCell order={row.original} />,
+    },
+    {
+      id: "delivery",
+      header: "Delivery",
+      enableSorting: false,
+      meta: { label: "Delivery" },
+      cell: ({ row }) => <DeliveryCell order={row.original} />,
     },
     {
       id: "status",

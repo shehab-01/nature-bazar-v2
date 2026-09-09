@@ -425,23 +425,6 @@ a {
   color: var(--muted);
   font-size: 12px;
 }
-.order-done-more button {
-  display: block;
-  width: auto;
-  margin: 10px auto 0;
-  padding: 8px 14px;
-  border: 1px solid #b9d987;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--green);
-  font: inherit;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-}
-.order-done-more button:hover {
-  background: #f2f9df;
-}
 /* A brief scatter of the brand colours when the order has just gone through. */
 .order-done-confetti {
   position: absolute;

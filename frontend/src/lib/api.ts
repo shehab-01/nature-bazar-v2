@@ -6,7 +6,7 @@ import type {
   OrderStatus,
   OrderTag,
 } from "@/lib/orders";
-import type { Product } from "@/lib/products";
+import type { Product, Variant } from "@/lib/products";
 import type { TeamMember, UserRole, UserStatus } from "@/lib/team";
 
 // Same-origin "/api/*" is proxied by Next.js to the FastAPI service
@@ -391,6 +391,70 @@ export async function getOrderStats(): Promise<OrderStats> {
   return request<OrderStats>("/api/orders/stats");
 }
 
+export type DashboardTotals = {
+  orders: number;
+  confirmed: number;
+  delivered: number;
+};
+
+export type DashboardPeriod = {
+  landed: number;
+  processing: number;
+  confirmed: number;
+  no_response: number;
+  cancelled: number;
+  manual: number;
+  leads: number;
+  leads_processing: number;
+  leads_confirmed: number;
+};
+
+export type Performer = {
+  user_id: number;
+  name: string;
+  nickname: string | null;
+  confirmed: number;
+  handled: number;
+};
+
+export type Dashboard = {
+  date_from: string;
+  date_to: string;
+  month: string;
+  this_month: DashboardTotals;
+  last_month: DashboardTotals;
+  period: DashboardPeriod;
+  performers: Performer[];
+};
+
+/** The home page's figures for a range of Dhaka days and the month it ends in. */
+export async function getDashboard(from: string, to: string): Promise<Dashboard> {
+  return request<Dashboard>(`/api/orders/dashboard?from=${from}&to=${to}`);
+}
+
+export type Activity = {
+  id: number;
+  order_id: number;
+  order_no: string;
+  customer_name: string;
+  event_type: string;
+  old_status: string | null;
+  new_status: string | null;
+  note: string | null;
+  created_at: string;
+};
+
+/** What one staff member did to orders over those days, newest first. */
+export async function getDashboardActivity(
+  userId: number,
+  from: string,
+  to: string
+): Promise<Activity[]> {
+  return request<Activity[]>(
+    `/api/orders/dashboard/activity?user_id=${userId}&from=${from}&to=${to}`
+  );
+}
+
 // ---- Auth & users ----
 
 export type AuthUser = {
@@ -415,6 +479,7 @@ type ApiUser = {
   last_active_at: string | null;
   orders_confirmed?: number;
   orders_shipped?: number;
+  pinned?: boolean;
 };
 
 function mapAuthUser(user: ApiUser): AuthUser {
@@ -436,6 +501,7 @@ function mapTeamMember(user: ApiUser): TeamMember {
     lastActiveAt: user.last_active_at,
     ordersConfirmed: user.orders_confirmed ?? 0,
     ordersShipped: user.orders_shipped ?? 0,
+    pinned: user.pinned ?? false,
   };
 }
 
@@ -585,75 +651,100 @@ export function getSystemOverview(): Promise<SystemOverview> {
 
 // --- Products ---------------------------------------------------------------
 
-type ApiProduct = {
+type ApiVariant = {
   id: number;
-  title: string;
-  subtitle: string;
+  product_id: number;
+  label: string;
   image_url: string | null;
   default_quantity: number;
   unit_price: number;
   sku: string;
+  is_default: boolean;
+};
+
+type ApiProduct = {
+  id: number;
+  title: string;
+  description: string;
   is_active: boolean;
   created_at: string;
   updated_at: string;
+  variants: ApiVariant[];
 };
+
+function mapVariant(v: ApiVariant): Variant {
+  return {
+    id: v.id,
+    productId: v.product_id,
+    label: v.label,
+    imageUrl: v.image_url,
+    defaultQuantity: v.default_quantity,
+    unitPrice: v.unit_price,
+    sku: v.sku,
+    isDefault: v.is_default,
+  };
+}
 
 function mapProduct(p: ApiProduct): Product {
   return {
     id: p.id,
     title: p.title,
-    subtitle: p.subtitle,
-    imageUrl: p.image_url,
-    defaultQuantity: p.default_quantity,
-    unitPrice: p.unit_price,
-    sku: p.sku,
+    description: p.description,
     isActive: p.is_active,
+    variants: p.variants.map(mapVariant),
     createdAt: p.created_at,
     updatedAt: p.updated_at,
   };
 }
 
-export type ProductInput = {
-  title: string;
-  subtitle: string;
+/** One version as the editor sends it: an id to update, or null for new. */
+export type VariantSaveInput = {
+  id: number | null;
+  label: string;
   defaultQuantity: number;
   unitPrice: number;
   sku: string;
+  isDefault: boolean;
 };
 
-function productBody(patch: Partial<ProductInput>) {
-  return {
-    title: patch.title,
-    subtitle: patch.subtitle,
-    default_quantity: patch.defaultQuantity,
-    unit_price: patch.unitPrice,
-    sku: patch.sku,
-  };
-}
+/** The whole product as the editor holds it. */
+export type ProductSaveInput = {
+  title: string;
+  description: string;
+  variants: VariantSaveInput[];
+};
 
 export async function listProducts(): Promise<Product[]> {
   return (await request<ApiProduct[]>("/api/products")).map(mapProduct);
 }
 
-export async function createProduct(input: ProductInput): Promise<Product> {
-  return mapProduct(
-    await request<ApiProduct>("/api/products", {
-      method: "POST",
-      body: JSON.stringify(productBody(input)),
-    })
+/**
+ * Save a product — name, versions and description — in one request and one
+ * transaction. Versions left out of the list are deleted. Answers with the
+ * product and the versions' ids in the order they were sent, so a picture
+ * can be attached to a row that did not exist before the save.
+ */
+export async function saveProduct(
+  input: ProductSaveInput,
+  id: number | null
+): Promise<{ product: Product; variantIds: number[] }> {
+  const body = JSON.stringify({
+    title: input.title,
+    description: input.description,
+    variants: input.variants.map((v) => ({
+      id: v.id,
+      label: v.label,
+      default_quantity: v.defaultQuantity,
+      unit_price: v.unitPrice,
+      sku: v.sku,
+      is_default: v.isDefault,
+    })),
+  });
+  const out = await request<{ product: ApiProduct; variant_ids: number[] }>(
+    id === null ? "/api/products" : `/api/products/${id}`,
+    { method: id === null ? "POST" : "PUT", body }
   );
-}
-
-export async function updateProduct(
-  id: number,
-  patch: Partial<ProductInput>
-): Promise<Product> {
-  return mapProduct(
-    await request<ApiProduct>(`/api/products/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(productBody(patch)),
-    })
-  );
+  return { product: mapProduct(out.product), variantIds: out.variant_ids };
 }
 
 /** Make one product the live one. Returns the whole list, already re-ordered. */
@@ -670,18 +761,22 @@ export async function deleteProduct(id: number): Promise<void> {
 }
 
 /**
- * Upload a product image. Sent as multipart, so this bypasses `request` —
+ * Upload a variant's image. Sent as multipart, so this bypasses `request` —
  * that helper forces a JSON content type, and the browser has to set its own
  * multipart boundary here.
  */
-export async function uploadProductImage(
-  id: number,
+export async function uploadVariantImage(
+  productId: number,
+  variantId: number,
   file: File
 ): Promise<Product> {
   const form = new FormData();
   form.append("file", file);
   return mapProduct(
-    await requestForm<ApiProduct>(`/api/products/${id}/image`, form)
+    await requestForm<ApiProduct>(
+      `/api/products/${productId}/variants/${variantId}/image`,
+      form
+    )
   );
 }
 
@@ -692,14 +787,14 @@ export type ManualOrderInput = {
   customerName: string;
   phone: string;
   address: string;
-  items: { productId: number; quantity: number }[];
+  items: { variantId: number; quantity: number }[];
   comment?: string;
   /** true drops it straight into Confirmed; false leaves it on Web Order List. */
   approved: boolean;
 };
 
 /**
- * Create an order on the customer's behalf. Only product ids and quantities go
+ * Create an order on the customer's behalf. Only variant ids and quantities go
  * up — the API prices the cart from the catalogue, so a tampered browser can
  * never set its own total.
  */
@@ -714,7 +809,7 @@ export async function createManualOrder(
         phone: input.phone,
         address: input.address,
         items: input.items.map((i) => ({
-          product_id: i.productId,
+          variant_id: i.variantId,
           quantity: i.quantity,
         })),
         comment: input.comment ?? "",

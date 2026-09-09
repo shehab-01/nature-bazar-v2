@@ -44,6 +44,8 @@ class OrderSource(str, enum.Enum):
     # Started life as an abandoned storefront form and was worked from the
     # Incomplete list, so confirmations here measure recovered leads.
     incomplete = "incomplete"
+    # Typed in by staff from a call, a WhatsApp or a Messenger chat.
+    manual = "manual"
 
 
 class UserRole(str, enum.Enum):
@@ -297,9 +299,12 @@ class IntegrationToken(Base):
 
 class Product(Base):
     """
-    A sellable product. The storefront sells exactly one at a time: the row
-    with is_active set is what the landing page shows and — more importantly —
-    what order creation prices against, so a client can never dictate a total.
+    A sellable product: the group the landing page is about. What is actually
+    priced and put in a parcel is one of its variants (a size, say); the product
+    carries what they share — the name and the description.
+
+    The storefront sells exactly one product at a time: the row with is_active
+    set is what the landing page shows, and its variants are the sizes offered.
 
     Orders keep their own product_name / unit_price / total_amount columns, so
     editing or deleting a product never rewrites what a past order recorded.
@@ -309,24 +314,23 @@ class Product(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     title: Mapped[str] = mapped_column(String(255))
-    subtitle: Mapped[str] = mapped_column(Text, default="")
-    # Path relative to settings.media_root, e.g. "products/a1b2c3.jpg". Served
-    # at /media/<image_path>; null until an image is uploaded.
-    image_path: Mapped[str | None] = mapped_column(String(255))
-    # What the storefront's quantity field starts at; the customer may change
-    # it, and the order records whatever they chose.
-    default_quantity: Mapped[int] = mapped_column(Integer, default=1)
-    # Unit price in whole taka.
-    unit_price: Mapped[int] = mapped_column(Integer)
-    # Mirrors PRODUCT.item_id in frontend/src/lib/tracking.ts and the Meta CAPI
-    # content id, so browser-side and server-side events agree on one id.
-    sku: Mapped[str] = mapped_column(String(64))
+    # Shown under the fold on the landing page. Plain text for now; the rich
+    # text editor will store HTML here later.
+    description: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    # The default first, then dearest to cheapest — which for sizes reads
+    # largest to smallest — so the landing page and the admin agree on order.
+    variants: Mapped[list["ProductVariant"]] = relationship(
+        lazy="selectin",
+        order_by="[ProductVariant.is_default.desc(), ProductVariant.unit_price.desc(), ProductVariant.id]",
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -338,6 +342,56 @@ class Product(Base):
             "is_active",
             unique=True,
             postgresql_where=text("is_active"),
+        ),
+    )
+
+
+class ProductVariant(Base):
+    """
+    One version of a product — a size, a pack — and the thing an order line
+    actually names. Everything that differs between versions lives here: the
+    price, the picture, the catalogue id the analytics events carry.
+
+    A product with no variants cannot be sold, so activating one is refused
+    until it has at least one; the first variant added becomes the default.
+    """
+
+    __tablename__ = "product_variants"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.id", ondelete="CASCADE"), index=True
+    )
+    # "২ কেজি". Empty on rows that predate variants, whose product title
+    # already said everything; see catalogue.variant_title.
+    label: Mapped[str] = mapped_column(String(120), default="")
+    # Path relative to settings.media_root, e.g. "products/a1b2c3.jpg". Served
+    # at /media/<image_path>; null until an image is uploaded.
+    image_path: Mapped[str | None] = mapped_column(String(255))
+    # Unit price in whole taka.
+    unit_price: Mapped[int] = mapped_column(Integer)
+    # Mirrors the item_id in frontend/src/lib/tracking.ts and the Meta CAPI
+    # content id, so browser-side and server-side events agree on one id.
+    sku: Mapped[str] = mapped_column(String(64))
+    # How many one storefront order of this variant places.
+    default_quantity: Mapped[int] = mapped_column(Integer, default=1)
+    # The variant selected when the landing page loads, and what the old
+    # storefront and an order that named no variant are priced against.
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+    __table_args__ = (
+        # One default per product, guaranteed by the database.
+        Index(
+            "uq_product_variants_single_default",
+            "product_id",
+            unique=True,
+            postgresql_where=text("is_default"),
         ),
     )
 
@@ -362,6 +416,11 @@ class OrderItem(Base):
     # the snapshot, so the line itself survives intact.
     product_id: Mapped[int | None] = mapped_column(
         ForeignKey("products.id", ondelete="SET NULL")
+    )
+    # Which version of it. Same rules as product_id: a link for reporting,
+    # not the source of the name or the price.
+    variant_id: Mapped[int | None] = mapped_column(
+        ForeignKey("product_variants.id", ondelete="SET NULL")
     )
     product_name: Mapped[str] = mapped_column(String(255))
     unit_price: Mapped[int] = mapped_column(Integer)
