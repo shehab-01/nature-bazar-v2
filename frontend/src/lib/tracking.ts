@@ -6,6 +6,8 @@
 // events are logged to the console in development so the flow can be verified
 // before the ID exists.
 
+import { metaCookies } from "@/lib/meta-cookies";
+
 export const PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID ?? "";
 export const GTM_ID = process.env.NEXT_PUBLIC_GTM_ID ?? "";
 
@@ -143,11 +145,16 @@ function postTrack(
   custom_data?: ServerCustomData,
 ) {
   if (!pixelActive() || typeof fetch !== "function") return;
+  // The Pixel cookies ride along in the body as well as in the Cookie header,
+  // so a proxy that strips cookies cannot cost the server copy its match keys.
+  const { fbp, fbc } = metaCookies();
   const body = JSON.stringify({
     event_name,
     event_id,
     event_source_url: window.location.href,
     ...(custom_data ? { custom_data } : {}),
+    ...(fbp ? { fbp } : {}),
+    ...(fbc ? { fbc } : {}),
   });
   if (debugEnabled()) console.log("[tracking] POST", TRACK_ENDPOINT, body);
   try {

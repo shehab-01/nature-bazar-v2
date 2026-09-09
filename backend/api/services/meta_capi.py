@@ -103,15 +103,24 @@ def synthesise_fbc(fbclid: str, now_ms: int | None = None) -> str:
     return f"fb.1.{now_ms if now_ms is not None else int(time.time() * 1000)}.{fbclid}"
 
 
-def client_context(request: Request, *, source_url: str | None = None) -> ClientContext:
+def client_context(
+    request: Request,
+    *,
+    source_url: str | None = None,
+    fbp_fallback: str | None = None,
+    fbc_fallback: str | None = None,
+) -> ClientContext:
     """
     Match keys from a storefront request: the real client address (via the
-    configured proxy header), the user agent, and the Pixel cookies. When the
-    page was reached from an ad click but the SDK has not set _fbc yet, the
-    fbclid in the page URL stands in for it.
+    configured proxy header), the user agent, and the Pixel cookies.
+
+    The cookies come from the Cookie header first. The fallbacks are the same
+    values as the page read them, sent in the body of POST /api/track, for a
+    proxy that strips cookies. When the page was reached from an ad click but
+    nothing has set _fbc yet, the fbclid in the page URL stands in for it.
     """
     url = source_url or request.headers.get("referer")
-    fbc = request.cookies.get("_fbc")
+    fbc = request.cookies.get("_fbc") or fbc_fallback
     if not fbc:
         fbclid = fbclid_from(url)
         if fbclid:
@@ -119,7 +128,7 @@ def client_context(request: Request, *, source_url: str | None = None) -> Client
     return ClientContext(
         ip=client_ip(request),
         user_agent=request.headers.get("user-agent"),
-        fbp=request.cookies.get("_fbp"),
+        fbp=request.cookies.get("_fbp") or fbp_fallback,
         fbc=fbc,
         source_url=url,
     )

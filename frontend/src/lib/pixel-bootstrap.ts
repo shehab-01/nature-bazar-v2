@@ -28,7 +28,7 @@ if(m&&!read('_fbc'))write('_fbc','fb.1.'+now+'.'+decodeURIComponent(m[1]));
 var id=(w.crypto&&w.crypto.randomUUID)?w.crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var q=Math.random()*16|0;return(c==='x'?q:(q&3|8)).toString(16);});
 w.fbq('init',${id});
 w.fbq('track','PageView',{},{eventID:id});
-var body=JSON.stringify({event_name:'PageView',event_id:id,event_source_url:l.href});
+var body=JSON.stringify({event_name:'PageView',event_id:id,event_source_url:l.href,fbp:read('_fbp'),fbc:read('_fbc')});
 try{if(typeof w.fetch==='function'){w.fetch('/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true,credentials:'same-origin'})['catch'](function(){});}else if(w.navigator&&w.navigator.sendBeacon){w.navigator.sendBeacon('/api/track',new Blob([body],{type:'application/json'}));}}catch(e){}
 })(window,document,location);`;
 }

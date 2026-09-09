@@ -55,7 +55,12 @@ async def track_event(payload: TrackEventIn, request: Request) -> Response:
     if not meta_capi.enabled():
         return Response(status_code=204)
 
-    ctx = meta_capi.client_context(request, source_url=payload.event_source_url)
+    ctx = meta_capi.client_context(
+        request,
+        source_url=payload.event_source_url,
+        fbp_fallback=payload.fbp,
+        fbc_fallback=payload.fbc,
+    )
     event = meta_capi.build_event(
         event_name=payload.event_name,
         event_id=str(payload.event_id),

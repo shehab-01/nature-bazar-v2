@@ -568,6 +568,13 @@ class TrackEventIn(BaseModel):
     event_id: UUID
     event_source_url: str | None = Field(default=None, max_length=2048)
     custom_data: TrackCustomData | None = None
+    # The Pixel cookies as the page read them. Normally redundant — the
+    # browser sends them as request cookies and the web container's proxy
+    # passes the Cookie header through — but a proxy that strips cookies would
+    # otherwise silently cost every server event its browser match keys. The
+    # API prefers the cookie header and falls back to these.
+    fbp: str | None = Field(default=None, max_length=64, pattern=r"^fb\.\d\.\d+\.\d+$")
+    fbc: str | None = Field(default=None, max_length=512, pattern=r"^fb\.\d\.\d+\.[\w.-]+$")
 
 
 class CapiResendIn(BaseModel):
