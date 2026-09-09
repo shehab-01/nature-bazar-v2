@@ -54,6 +54,9 @@ class Settings:
     rate_limit_orders: int = int(os.getenv("RATE_LIMIT_ORDERS", "30"))
     rate_limit_drafts: int = int(os.getenv("RATE_LIMIT_DRAFTS", "300"))
     rate_limit_logins: int = int(os.getenv("RATE_LIMIT_LOGINS", "20"))
+    # POST /api/track (server copies of browser Pixel events), per IP per
+    # minute — not per the window above; a page fires a handful at most.
+    rate_limit_track: int = int(os.getenv("RATE_LIMIT_TRACK", "60"))
     # Header carrying the real client address. Cloudflare sets this one and
     # overwrites whatever the client sent. Empty = trust the socket address.
     client_ip_header: str = os.getenv("CLIENT_IP_HEADER", "cf-connecting-ip")

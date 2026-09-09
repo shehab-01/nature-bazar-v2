@@ -5,7 +5,9 @@
 // first PageView with the event id its server copy will share.
 //
 // fbevents.js itself is loaded later, by MetaPixel.tsx, after hydration and on
-// the first interaction or a short timer. Nothing here touches the network.
+// the first interaction or a short timer. The only network call here is the
+// same-origin POST of the PageView id to /api/track, sent with keepalive (or
+// sendBeacon) so it goes out even if the visitor leaves before hydration.
 //
 // Plain ES5 by hand: this string is not compiled by the bundler, and it runs
 // on whatever browser opened the page. Cookie logic mirrors meta-cookies.ts.
@@ -26,6 +28,7 @@ if(m&&!read('_fbc'))write('_fbc','fb.1.'+now+'.'+decodeURIComponent(m[1]));
 var id=(w.crypto&&w.crypto.randomUUID)?w.crypto.randomUUID():'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g,function(c){var q=Math.random()*16|0;return(c==='x'?q:(q&3|8)).toString(16);});
 w.fbq('init',${id});
 w.fbq('track','PageView',{},{eventID:id});
-w.__nbPageView={id:id,url:l.href};
+var body=JSON.stringify({event_name:'PageView',event_id:id,event_source_url:l.href});
+try{if(typeof w.fetch==='function'){w.fetch('/api/track',{method:'POST',headers:{'Content-Type':'application/json'},body:body,keepalive:true,credentials:'same-origin'})['catch'](function(){});}else if(w.navigator&&w.navigator.sendBeacon){w.navigator.sendBeacon('/api/track',new Blob([body],{type:'application/json'}));}}catch(e){}
 })(window,document,location);`;
 }

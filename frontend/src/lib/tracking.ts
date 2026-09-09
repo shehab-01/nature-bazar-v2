@@ -112,11 +112,65 @@ export function newEventId(): string {
   });
 }
 
+/** Where the server copies go; the Next rewrite proxies it to the API. */
+export const TRACK_ENDPOINT = "/api/track";
+
+/** The events that get a server copy through TRACK_ENDPOINT. Purchase is not
+ * one: the order endpoint sends its server copy itself. */
+export type TrackedEventName =
+  | "PageView"
+  | "ViewContent"
+  | "AddToCart"
+  | "InitiateCheckout";
+
+/** The only custom_data keys the server accepts — the ones the Pixel sends. */
+export type ServerCustomData = {
+  content_ids?: string[];
+  content_type?: string;
+  value?: number;
+  currency?: string;
+  num_items?: number;
+};
+
+/**
+ * Report a browser event to the API so it can send the Conversions API twin
+ * with the same id. Fire-and-forget: `keepalive` lets the request outlive a
+ * navigation or a closed tab, and nothing ever waits on the result.
+ */
+function postTrack(
+  event_name: TrackedEventName,
+  event_id: string,
+  custom_data?: ServerCustomData,
+) {
+  if (!pixelActive() || typeof fetch !== "function") return;
+  const body = JSON.stringify({
+    event_name,
+    event_id,
+    event_source_url: window.location.href,
+    ...(custom_data ? { custom_data } : {}),
+  });
+  if (debugEnabled()) console.log("[tracking] POST", TRACK_ENDPOINT, body);
+  try {
+    void fetch(TRACK_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+      credentials: "same-origin",
+    }).catch(() => {
+      // Best effort by design; the browser copy already went out.
+    });
+  } catch {
+    // Same: a throwing fetch (e.g. body too large for keepalive) is ignored.
+  }
+}
+
 /** PageView for a client-side navigation. The first load is fired by the
  * inline bootstrap; see MetaPixel.tsx. Returns the event id used. */
 export function trackPageView(): string {
   const eventID = newEventId();
   fbq("track", "PageView", {}, { eventID });
+  postTrack("PageView", eventID);
   return eventID;
 }
 
@@ -133,30 +187,50 @@ function pixelContents(items: TrackedItem[]) {
   };
 }
 
-export function trackViewItem(items: TrackedItem[]) {
+/** The subset of the Pixel parameters the server copy carries. */
+function serverContents(items: TrackedItem[], value: number): ServerCustomData {
+  return {
+    content_type: "product",
+    content_ids: items.map((item) => item.item_id),
+    currency: CURRENCY,
+    value,
+    num_items: items.reduce((n, item) => n + item.quantity, 0),
+  };
+}
+
+export function trackViewItem(items: TrackedItem[]): string {
   const value = cartValue(items);
+  const eventID = newEventId();
   push({
     event: "view_item",
     pageType: "product-page",
     productType: "simple",
     ecommerce: { items, value, currency: CURRENCY },
   });
-  fbq("track", "ViewContent", {
-    ...pixelContents(items),
-    content_name: items[0]?.item_name,
-    value,
-  });
+  fbq(
+    "track",
+    "ViewContent",
+    { ...pixelContents(items), content_name: items[0]?.item_name, value },
+    { eventID },
+  );
+  postTrack("ViewContent", eventID, serverContents(items, value));
+  return eventID;
 }
 
-export function trackAddToCart(items: TrackedItem[]) {
+export function trackAddToCart(items: TrackedItem[]): string {
   const value = cartValue(items);
+  // A fresh id per click: each click is a real intent, and each browser/server
+  // pair has to deduplicate on its own.
+  const eventID = newEventId();
   push({
     event: "add_to_cart",
     pageType: "product-page",
     productType: "simple",
     ecommerce: { currency: CURRENCY, value, items },
   });
-  fbq("track", "AddToCart", { ...pixelContents(items), value });
+  fbq("track", "AddToCart", { ...pixelContents(items), value }, { eventID });
+  postTrack("AddToCart", eventID, serverContents(items, value));
+  return eventID;
 }
 
 export function trackViewCart(items: TrackedItem[]) {
@@ -168,18 +242,23 @@ export function trackViewCart(items: TrackedItem[]) {
   // Meta has no standard cart-view event; dataLayer only.
 }
 
-export function trackBeginCheckout(items: TrackedItem[]) {
+export function trackBeginCheckout(items: TrackedItem[]): string {
   const value = cartValue(items);
+  const eventID = newEventId();
+  const num_items = items.reduce((n, item) => n + item.quantity, 0);
   push({
     event: "begin_checkout",
     pageType: "checkout",
     ecommerce: { currency: CURRENCY, value, items },
   });
-  fbq("track", "InitiateCheckout", {
-    ...pixelContents(items),
-    num_items: items.reduce((n, item) => n + item.quantity, 0),
-    value,
-  });
+  fbq(
+    "track",
+    "InitiateCheckout",
+    { ...pixelContents(items), num_items, value },
+    { eventID },
+  );
+  postTrack("InitiateCheckout", eventID, serverContents(items, value));
+  return eventID;
 }
 
 export function trackPurchase(input: {

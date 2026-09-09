@@ -14,6 +14,7 @@ from api.config import settings
 from api.db import engine, get_session
 from api.models import Order, OrderEvent, TrafficMinute, User, UserStatus
 from api.ratelimit import client_ip, drafts_limiter, logins_limiter, orders_limiter
+from api.routers.track import track_limiter
 from api.schemas import PathaoStatusOut
 from api.services import meta_capi, pathao
 
@@ -207,7 +208,7 @@ async def overview(
         "rate_limits": {
             "limiters": [
                 limiter.snapshot()
-                for limiter in (orders_limiter, drafts_limiter, logins_limiter)
+                for limiter in (orders_limiter, drafts_limiter, logins_limiter, track_limiter)
             ],
             "order_cooldown_hours": settings.order_cooldown_hours,
             "client_ip_header": settings.client_ip_header,

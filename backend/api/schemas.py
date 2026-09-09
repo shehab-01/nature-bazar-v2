@@ -1,4 +1,6 @@
 from datetime import date, datetime, timedelta, timezone
+from typing import Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -520,3 +522,49 @@ class PhoneLookupOut(BaseModel):
     # call — nothing was ordered, so it is a lead to close, not a delivery to
     # explain.
     incomplete: list[OrderOut] = []
+
+
+# --- Meta tracking -----------------------------------------------------------
+
+# The browser Pixel events that get a server-side twin through POST /api/track.
+# Purchase is not here: its server copy is sent by the order endpoint itself.
+TRACK_EVENT_NAMES = ("PageView", "ViewContent", "AddToCart", "InitiateCheckout")
+
+
+class TrackCustomData(BaseModel):
+    """
+    The parameters the browser Pixel already sends with these events, and
+    nothing else — the schema forbids extra keys, so no PII can ride along.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    content_ids: list[str] | None = Field(default=None, max_length=50)
+    content_type: str | None = Field(default=None, max_length=32)
+    value: float | None = Field(default=None, ge=0)
+    currency: str | None = Field(default=None, min_length=3, max_length=3)
+    num_items: int | None = Field(default=None, ge=0)
+
+    @field_validator("content_ids")
+    @classmethod
+    def _ids(cls, value: list[str] | None) -> list[str] | None:
+        if value is not None and any(len(item) > 64 for item in value):
+            raise ValueError("content id too long")
+        return value
+
+
+class TrackEventIn(BaseModel):
+    """
+    A browser Pixel event, reported so the API can send the same event to the
+    Conversions API with the same id. Meta deduplicates the pair; the server
+    copy survives an ad blocker or a tab closed before the SDK loaded.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    event_name: Literal["PageView", "ViewContent", "AddToCart", "InitiateCheckout"]
+    # The browser's eventID. UUID only: the browser mints it, the server never
+    # keys anything on it, and an arbitrary string would be a channel for junk.
+    event_id: UUID
+    event_source_url: str | None = Field(default=None, max_length=2048)
+    custom_data: TrackCustomData | None = None

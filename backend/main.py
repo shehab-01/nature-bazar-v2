@@ -15,6 +15,7 @@ from api.routers.products import public_router as storefront_router
 from api.routers.products import router as products_router
 from api.services import pathao_sync
 from api.routers.system import router as system_router
+from api.routers.track import router as track_router
 from api.routers.users import router as users_router
 
 
@@ -45,6 +46,7 @@ app.include_router(users_router, prefix="/api")
 app.include_router(system_router, prefix="/api")
 app.include_router(products_router, prefix="/api")
 app.include_router(storefront_router, prefix="/api")
+app.include_router(track_router, prefix="/api")
 
 # Uploaded product images. settings.media_root is a mounted volume, so the
 # directory may not exist on a first boot; StaticFiles refuses to mount a
