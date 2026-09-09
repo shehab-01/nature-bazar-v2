@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -291,9 +291,34 @@ class Performer(BaseModel):
     handled: int
 
 
+class WorkdayOut(BaseModel):
+    """The shop's working day: when it ends ("HH:MM", Dhaka), and which
+    working day it is now — the date "today" means on the dashboard and in
+    the order tables. Set by a super admin; see api.workday."""
+
+    day_end: str
+    today: date
+
+
+class WorkdayIn(BaseModel):
+    day_end: time
+
+    @field_validator("day_end")
+    @classmethod
+    def _whole_minutes(cls, value: time) -> time:
+        if value.second or value.microsecond or value.tzinfo is not None:
+            raise ValueError("Use HH:MM")
+        return value
+
+
 class DashboardOut(BaseModel):
     date_from: date
     date_to: date
+    # The current working day, so the picker's "Today" is the shop's today —
+    # after the closing hour that is already tomorrow's date.
+    today: date
+    # "22:00": the hour the working day ends; "00:00" for calendar days.
+    day_end: str
     # "2026-09": the month the top row describes — the one date_to falls in.
     month: str
     this_month: DashboardTotals
