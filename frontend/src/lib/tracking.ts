@@ -73,16 +73,51 @@ function push(payload: Record<string, unknown>) {
   if (debugEnabled()) console.log("[tracking] dataLayer.push", event);
 }
 
+/**
+ * Whether Pixel calls should go out at all: there is a pixel id, we are in a
+ * browser, and this is not an admin page (staff traffic never reaches Meta).
+ */
+function pixelActive(): boolean {
+  if (typeof window === "undefined" || !PIXEL_ID) return false;
+  return !window.location.pathname.startsWith("/admin");
+}
+
+/**
+ * Call the Pixel. `window.fbq` is defined synchronously by the inline
+ * bootstrap in the document head, before hydration, and queues every call
+ * until fbevents.js has loaded — so nothing is dropped for arriving early.
+ */
 function fbq(...args: unknown[]) {
-  if (typeof window === "undefined") return;
-  const loaded = Boolean(window.fbq);
+  if (!pixelActive()) {
+    if (debugEnabled()) console.log("[tracking] fbq (pixel off)", ...args);
+    return;
+  }
   if (debugEnabled()) {
     console.log(
-      `[tracking] fbq (${loaded ? "pixel loaded" : "pixel not loaded"})`,
+      `[tracking] fbq (${window.fbq ? "queued/sent" : "no stub!"})`,
       ...args,
     );
   }
-  if (loaded) window.fbq?.(...args);
+  window.fbq?.(...args);
+}
+
+/** A fresh event id, shared by the browser and server copy of one event. */
+export function newEventId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    return (c === "x" ? r : (r & 3) | 8).toString(16);
+  });
+}
+
+/** PageView for a client-side navigation. The first load is fired by the
+ * inline bootstrap; see MetaPixel.tsx. Returns the event id used. */
+export function trackPageView(): string {
+  const eventID = newEventId();
+  fbq("track", "PageView", {}, { eventID });
+  return eventID;
 }
 
 function pixelContents(items: TrackedItem[]) {

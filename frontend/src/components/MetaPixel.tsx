@@ -1,52 +1,75 @@
 "use client";
 
-import Script from "next/script";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef } from "react";
 
-import { GTM_ID, PIXEL_ID } from "@/lib/tracking";
+import { GTM_ID, PIXEL_ID, trackPageView } from "@/lib/tracking";
+
+const FBEVENTS_SRC = "https://connect.facebook.net/en_US/fbevents.js";
+/** Load the SDKs by this point even if the visitor never touches the page. */
+const LOAD_AFTER_MS = 1500;
+const FIRST_INTERACTION = ["pointerdown", "keydown", "scroll", "touchstart"] as const;
 
 /**
- * Loads the Meta Pixel (and optionally GTM) on public storefront routes.
- * Admin routes are excluded so staff traffic never reaches ad platforms.
+ * Loads the Meta Pixel SDK (and optionally GTM) on public storefront routes,
+ * and fires PageView on client-side navigations.
+ *
+ * The fbq stub, the cookies and the initial PageView are handled by the inline
+ * bootstrap in the document head (see lib/pixel-bootstrap.ts), so by the time
+ * this mounts every event is already being queued. All this has to do is
+ * fetch fbevents.js — after hydration, on the first interaction or a short
+ * timer, whichever comes first — so the SDK never competes with the page for
+ * the first paint. Admin routes are excluded so staff traffic never reaches
+ * ad platforms.
  */
 export default function MetaPixel() {
   const pathname = usePathname();
-  const isAdmin = pathname?.startsWith("/admin");
+  const isAdmin = pathname?.startsWith("/admin") ?? false;
   const lastTracked = useRef(pathname);
 
+  // PageView on client-side navigations; the initial load is covered by the
+  // inline bootstrap.
   useEffect(() => {
     if (isAdmin || pathname === lastTracked.current) return;
-    // Fire PageView on client-side navigations; the initial load is covered
-    // by the inline snippet below.
     lastTracked.current = pathname;
-    window.fbq?.("track", "PageView");
+    trackPageView();
   }, [pathname, isAdmin]);
 
-  if (isAdmin) return null;
+  // Deferred SDK loading, once per page load.
+  useEffect(() => {
+    if (isAdmin || (!PIXEL_ID && !GTM_ID)) return;
+    let done = false;
+    const load = () => {
+      if (done) return;
+      done = true;
+      cleanup();
+      if (PIXEL_ID) inject("meta-pixel-sdk", FBEVENTS_SRC);
+      if (GTM_ID) {
+        window.dataLayer = window.dataLayer ?? [];
+        window.dataLayer.push({ "gtm.start": Date.now(), event: "gtm.js" });
+        inject("gtm", `https://www.googletagmanager.com/gtm.js?id=${GTM_ID}`);
+      }
+    };
+    const timer = setTimeout(load, LOAD_AFTER_MS);
+    for (const name of FIRST_INTERACTION) {
+      window.addEventListener(name, load, { once: true, passive: true });
+    }
+    function cleanup() {
+      clearTimeout(timer);
+      for (const name of FIRST_INTERACTION) window.removeEventListener(name, load);
+    }
+    return cleanup;
+  }, [isAdmin]);
 
-  return (
-    <>
-      {PIXEL_ID && (
-        <Script id="meta-pixel" strategy="afterInteractive">
-          {`!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-document,'script','https://connect.facebook.net/en_US/fbevents.js');
-fbq('init', '${PIXEL_ID}');
-fbq('track', 'PageView');`}
-        </Script>
-      )}
-      {GTM_ID && (
-        <Script id="gtm" strategy="afterInteractive">
-          {`(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':
-new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],
-j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
-'https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);
-})(window,document,'script','dataLayer','${GTM_ID}');`}
-        </Script>
-      )}
-    </>
-  );
+  return null;
+}
+
+/** Append an async script tag once; a second call with the same id is a no-op. */
+function inject(id: string, src: string) {
+  if (document.getElementById(id)) return;
+  const script = document.createElement("script");
+  script.id = id;
+  script.async = true;
+  script.src = src;
+  document.head.appendChild(script);
 }
