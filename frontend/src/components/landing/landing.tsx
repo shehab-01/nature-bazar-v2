@@ -84,11 +84,16 @@ export function Landing({ listing }: { listing: StorefrontListing }) {
     [variant, quantity],
   );
 
-  // view_item / ViewContent: on load for the default size, and again whenever
-  // another size is picked — to Meta each size is its own content id.
+  // view_item / ViewContent: once per page load per product — on load for
+  // the default size, and once more when a size with a different catalogue id
+  // is picked (to Meta each id is its own content). Picking the same size
+  // again, or a quantity change, fires nothing.
+  const viewedSku = useRef<string | null>(null);
   useEffect(() => {
+    if (viewedSku.current === variant.sku) return;
+    viewedSku.current = variant.sku;
     trackViewItem(items);
-  }, [items]);
+  }, [variant.sku, items]);
 
   // Back within 24h of ordering: show the confirmation, not a form that would
   // only refuse the same number. Also follow another tab that just ordered.
