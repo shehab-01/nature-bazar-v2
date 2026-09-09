@@ -10,6 +10,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.config import settings
+from api import visits
 from api.routers import track
 from api.services import meta_capi
 
@@ -26,10 +27,16 @@ def client(monkeypatch):
     monkeypatch.setattr(settings, "client_ip_header", "cf-connecting-ip")
     sent: list[dict] = []
     monkeypatch.setattr(meta_capi, "dispatch", lambda event: sent.append(event))
+    # Visits are written from a task of their own; capture the call instead.
+    visited: list[dict] = []
+    monkeypatch.setattr(
+        visits, "record", lambda request, **kw: visited.append({"request": request, **kw})
+    )
     app = FastAPI()
     app.include_router(track.router, prefix="/api")
     test_client = TestClient(app)
     test_client.sent = sent  # type: ignore[attr-defined]
+    test_client.visited = visited  # type: ignore[attr-defined]
     return test_client
 
 
@@ -211,3 +218,45 @@ def test_rate_limited_per_ip(client, monkeypatch):
     assert "Retry-After" in res.headers
     # Another address is not affected.
     assert post(client, body, ip="7.7.7.7").status_code == 204
+
+
+# --- visits (the System page's visitor count) --------------------------------
+
+
+def test_page_view_is_recorded_as_a_visit(client):
+    post(client, {"event_name": "PageView", "event_id": UID,
+                  "event_source_url": "https://shop.example/?ref=x", "fbp": "fb.1.1.2"})
+    assert len(client.visited) == 1
+    assert client.visited[0]["source_url"] == "https://shop.example/?ref=x"
+    assert client.visited[0]["fbp_fallback"] == "fb.1.1.2"
+
+
+@pytest.mark.parametrize("name", ["ViewContent", "AddToCart", "InitiateCheckout"])
+def test_other_events_are_not_visits(client, name):
+    post(client, {"event_name": name, "event_id": UID})
+    assert client.visited == []
+
+
+def test_admin_page_views_are_not_visits(client):
+    post(client, {"event_name": "PageView", "event_id": UID,
+                  "event_source_url": "https://shop.example/admin/orders"})
+    assert client.visited == []
+
+
+def test_visits_are_recorded_even_without_meta(client, monkeypatch):
+    monkeypatch.setattr(settings, "meta_capi_access_token", "")
+    post(client, {"event_name": "PageView", "event_id": UID})
+    assert client.sent == []
+    assert len(client.visited) == 1
+
+
+def test_visitor_key_prefers_the_cookie_and_never_stores_it():
+    by_cookie = visits.visitor_key("fb.1.1.2", "8.8.8.8", "UA/1.0")
+    assert len(by_cookie) == 32 and "fb.1.1.2" not in by_cookie
+    # Same browser from another address: same visitor.
+    assert visits.visitor_key("fb.1.1.2", "1.1.1.1", "UA/2.0") == by_cookie
+    # No cookie: the address and agent stand in, and differ from the cookie key.
+    fallback = visits.visitor_key(None, "8.8.8.8", "UA/1.0")
+    assert fallback != by_cookie
+    assert visits.visitor_key(None, "8.8.8.8", "UA/1.0") == fallback
+    assert visits.visitor_key(None, "8.8.8.9", "UA/1.0") != fallback

@@ -12,6 +12,7 @@ import {
   Server,
   ShieldAlert,
   ShieldCheck,
+  Users,
   XCircle,
 } from "lucide-react";
 
@@ -538,6 +539,58 @@ export default function SystemPage() {
                 value={data.traffic.last_24h.server_errors.toLocaleString()}
                 icon={XCircle}
                 tone={data.traffic.last_24h.server_errors ? "critical" : "neutral"}
+              />
+            </div>
+          </Section>
+
+          <Section
+            title="Visitors"
+            description={
+              data.visitors.since
+                ? `Distinct browsers on the storefront, and how many of them ordered. Counting since ${new Date(data.visitors.since).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}; Dhaka days.`
+                : "Distinct browsers on the storefront, and how many of them ordered. Nothing counted yet — the first storefront page view starts it."
+            }
+          >
+            <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
+              <div className="overflow-hidden rounded-lg border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Window</TableHead>
+                      <TableHead className="text-right">Visitors</TableHead>
+                      <TableHead className="text-right">Page views</TableHead>
+                      <TableHead className="text-right">Web orders</TableHead>
+                      <TableHead className="text-right">Conversion</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.visitors.periods.map((p) => (
+                      <TableRow key={p.key}>
+                        <TableCell className="font-medium">{p.label}</TableCell>
+                        <TableCell className="text-right tabular-nums">{p.visitors.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">{p.page_views.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">{p.orders.toLocaleString()}</TableCell>
+                        <TableCell className="text-right tabular-nums">
+                          {p.conversion_pct === null ? "—" : `${p.conversion_pct.toFixed(1)}%`}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              <Tile
+                label="Conversion today"
+                value={
+                  data.visitors.periods[0]?.conversion_pct == null
+                    ? "—"
+                    : `${data.visitors.periods[0].conversion_pct.toFixed(1)}%`
+                }
+                detail={`${data.visitors.periods[0]?.orders ?? 0} web order${
+                  data.visitors.periods[0]?.orders === 1 ? "" : "s"
+                } from ${data.visitors.periods[0]?.visitors ?? 0} visitor${
+                  data.visitors.periods[0]?.visitors === 1 ? "" : "s"
+                }. A visitor is one browser (its _fbp cookie); orders typed in by staff are not counted.`}
+                icon={Users}
               />
             </div>
           </Section>

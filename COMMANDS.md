@@ -167,6 +167,18 @@ and put `CLIENT_IP_HEADER=x-forwarded-for` in `.env`, then
 header" should show the visitor's real IP. Without Cloudflare there is no edge
 rate limit, so the API's own limits are the only brake.
 
+## Visitors & conversion (Admin → System)
+
+The System page's **Visitors** section counts distinct browsers on the
+storefront and how many of them ordered, for today, the last 7 and the last
+30 days (Dhaka days). It is fed by the PageView report every storefront page
+load posts to `/api/track`, so it only counts while `META_PIXEL_ID` is set
+(the page does not post without a pixel id; the CAPI token is not needed).
+A visitor is the hash of the browser's `_fbp` cookie — or of address + user
+agent without one — nothing identifying is stored. Rows live in the `visits`
+table for 400 days. Web orders means orders placed on the site: staff-typed
+orders and abandoned forms are not counted. Code: `backend/api/visits.py`.
+
 ## Status & logs
 
 Without SSH: **Admin → System** (super admins only) shows API/database health,

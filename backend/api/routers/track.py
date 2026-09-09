@@ -16,6 +16,7 @@ from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, Request, Response
 
+from api import visits
 from api.config import settings
 from api.ratelimit import RateLimiter
 from api.schemas import TrackEventIn
@@ -52,6 +53,12 @@ async def track_event(payload: TrackEventIn, request: Request) -> Response:
         request.headers.get("referer")
     ):
         return Response(status_code=204)
+    # A page view is a visit for the System page's visitor count, whether or
+    # not Meta is configured.
+    if payload.event_name == "PageView":
+        visits.record(
+            request, source_url=payload.event_source_url, fbp_fallback=payload.fbp
+        )
     if not meta_capi.enabled():
         return Response(status_code=204)
 

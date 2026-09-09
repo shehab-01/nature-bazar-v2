@@ -587,8 +587,25 @@ export type OrderFlow = {
   cancelled: number;
 };
 
+export type VisitorPeriod = {
+  key: "today" | "last_7d" | "last_30d";
+  label: string;
+  since: string;
+  page_views: number;
+  visitors: number;
+  orders: number;
+  /** Web orders per hundred visitors; null when nobody visited. */
+  conversion_pct: number | null;
+};
+
 export type SystemOverview = {
   generated_at: string;
+  visitors: {
+    periods: VisitorPeriod[];
+    /** When visit counting began; null until the first page view lands. */
+    since: string | null;
+    retain_days: number;
+  };
   database: {
     ok: boolean;
     latency_ms: number;

@@ -449,3 +449,20 @@ class OrderItem(Base):
     @property
     def line_total(self) -> int:
         return self.unit_price * self.quantity
+
+
+class Visit(Base):
+    """One storefront page view, from the PageView report the page posts to
+    /api/track. `visitor` is a hash — of the browser's _fbp cookie, or of the
+    address and user agent when there is none — so distinct visitors can be
+    counted without keeping anything that identifies a person. See api.visits.
+    """
+
+    __tablename__ = "visits"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), index=True
+    )
+    visitor: Mapped[str] = mapped_column(String(32))
+    path: Mapped[str | None] = mapped_column(String(255))

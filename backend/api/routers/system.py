@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api import monitoring
+from api import monitoring, visits
 from api.auth import require_super_admin
 from api.config import settings
 from api.db import engine, get_session
@@ -199,6 +199,7 @@ async def overview(
             "last_24h": _totals(day),
             "flush_every_seconds": monitoring.FLUSH_EVERY_SECONDS,
         },
+        "visitors": await visits.summary(session),
         "orders": {
             "flow": flow,
             "by_status": by_status,

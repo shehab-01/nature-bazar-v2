@@ -23,6 +23,7 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import delete
 from sqlalchemy.dialects.postgresql import insert
 
+from api import visits
 from api.db import async_session
 from api.models import TrafficMinute
 
@@ -177,6 +178,10 @@ async def prune() -> None:
             await session.commit()
     except Exception as exc:  # noqa: BLE001
         log.warning("traffic prune failed: %s", exc)
+    try:
+        await visits.prune()
+    except Exception as exc:  # noqa: BLE001
+        log.warning("visits prune failed: %s", exc)
 
 
 async def _flush_loop() -> None:
