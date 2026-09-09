@@ -1,3 +1,4 @@
+import logging
 import os
 from contextlib import asynccontextmanager
 
@@ -17,6 +18,16 @@ from api.services import meta_capi, pathao_sync
 from api.routers.system import router as system_router
 from api.routers.track import router as track_router
 from api.routers.users import router as users_router
+
+# Uvicorn configures only its own loggers; the root logger would otherwise sit
+# at WARNING and swallow the app's INFO lines — including "CAPI Purchase …
+# sent", the one line that says a Meta event actually went out.
+logging.basicConfig(
+    level=logging.INFO, format="%(levelname)s:     %(name)s: %(message)s"
+)
+# httpx logs every request URL at INFO, and the Conversions API token travels
+# in the query string, so that logger stays at WARNING.
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 
 @asynccontextmanager
