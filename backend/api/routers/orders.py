@@ -910,8 +910,10 @@ async def create_manual_order(
     either in Confirmed (approved) or on the Web Order List (manual), which is
     what the toggle at the top of the page picks.
 
-    Prices come from the catalogue, never from the request: the browser sends
-    variant ids and quantities only.
+    Prices come from the catalogue by default: the browser sends variant ids
+    and quantities, and the API prices the cart. Staff may override the total
+    (a negotiated discount, say) via total_override; every per-item price
+    still comes from the catalogue, only the summary total_amount changes.
 
     No Meta Purchase event is sent for these, on purpose: they are typed in by
     staff from a call or a chat, not placed on the site, so there is no ad
@@ -935,7 +937,10 @@ async def create_manual_order(
         )
 
     items = [_line(on_sale[line.variant_id], line.quantity) for line in payload.items]
-    total = sum(item.unit_price * item.quantity for item in items)
+    catalogue_total = sum(item.unit_price * item.quantity for item in items)
+    total = (
+        payload.total_override if payload.total_override is not None else catalogue_total
+    )
     units = sum(item.quantity for item in items)
 
     status = (

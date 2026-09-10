@@ -167,10 +167,17 @@ export default function ManualOrderPage() {
     else setAskAdmin(true);
   };
 
-  const total = cart.reduce(
+  const catalogueTotal = cart.reduce(
     (sum, line) => sum + line.variant.unitPrice * line.quantity,
     0
   );
+  // null = follow the catalogue total; a number once staff have typed their
+  // own due amount (a negotiated discount, say).
+  const [totalOverride, setTotalOverride] = React.useState<number | null>(
+    null
+  );
+  const total = totalOverride ?? catalogueTotal;
+  const overridden = totalOverride !== null && totalOverride !== catalogueTotal;
 
   const filtered = products.filter((product) => {
     const q = productSearch.trim().toLowerCase();
@@ -203,6 +210,7 @@ export default function ManualOrderPage() {
           variantId: line.variant.id,
           quantity: line.quantity,
         })),
+        totalOverride: overridden ? totalOverride ?? undefined : undefined,
       });
       notifyOrdersChanged();
       setDone(
@@ -217,6 +225,7 @@ export default function ManualOrderPage() {
       setAddress("");
       setComment("");
       setCart([]);
+      setTotalOverride(null);
       setPrevious(NO_LOOKUP);
       setSearched(false);
     } catch (err) {
@@ -479,17 +488,41 @@ export default function ManualOrderPage() {
           <dl className="flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Items total</dt>
-              <dd className="tabular-nums">৳ {total}</dd>
+              <dd className="tabular-nums">৳ {catalogueTotal}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-muted-foreground">Delivery</dt>
               <dd className="tabular-nums">৳ 0</dd>
             </div>
           </dl>
-          <div className="flex items-baseline justify-between rounded-lg bg-muted px-3 py-2.5">
+          <div className="flex items-center justify-between gap-3 rounded-lg bg-muted px-3 py-2.5">
             <span className="text-sm font-semibold">Due amount</span>
-            <span className="text-lg font-bold tabular-nums">৳ {total}</span>
+            <span className="flex items-center gap-1">
+              <span className="text-lg font-bold">৳</span>
+              <Input
+                className="h-8 w-24 border-none bg-transparent px-1 text-right text-lg font-bold tabular-nums shadow-none focus-visible:ring-1"
+                inputMode="numeric"
+                aria-label="Due amount"
+                value={total}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, "");
+                  setTotalOverride(digits === "" ? 0 : Number(digits));
+                }}
+              />
+            </span>
           </div>
+          {overridden && (
+            <div className="flex items-center justify-between text-xs text-muted-foreground">
+              <span>Adjusted from the catalogue total of ৳ {catalogueTotal}.</span>
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                onClick={() => setTotalOverride(null)}
+              >
+                Reset
+              </button>
+            </div>
+          )}
           <Button onClick={submit} disabled={!valid || saving}>
             {saving && <Loader2 className="size-4 animate-spin" />}
             {approved ? "Create Approved Order" : "Create Manual Order"}

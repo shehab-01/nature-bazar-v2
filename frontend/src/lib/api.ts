@@ -824,12 +824,16 @@ export type ManualOrderInput = {
   comment?: string;
   /** true drops it straight into Confirmed; false leaves it on Web Order List. */
   approved: boolean;
+  /** Staff override for the total (a negotiated discount, say). Omit to use
+   *  the catalogue price, which is what the storefront always uses. */
+  totalOverride?: number;
 };
 
 /**
- * Create an order on the customer's behalf. Only variant ids and quantities go
- * up — the API prices the cart from the catalogue, so a tampered browser can
- * never set its own total.
+ * Create an order on the customer's behalf. Variant ids and quantities are
+ * always priced from the catalogue; totalOverride, if set, is the only way
+ * the total can differ from that, and it is only honoured for staff-entered
+ * orders like this one — the storefront never sends it.
  */
 export async function createManualOrder(
   input: ManualOrderInput
@@ -847,6 +851,7 @@ export async function createManualOrder(
         })),
         comment: input.comment ?? "",
         approved: input.approved,
+        total_override: input.totalOverride ?? null,
       }),
     })
   );
