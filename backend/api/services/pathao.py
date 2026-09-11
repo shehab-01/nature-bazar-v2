@@ -363,6 +363,12 @@ async def price_plan(city_id: int, zone_id: int, quantity: int = 1) -> dict[str,
     return data if isinstance(data, dict) else {}
 
 
+def is_rate_limited(exc: PathaoError) -> bool:
+    """Pathao's 429 — too many calls too fast. Worth backing off and
+    retrying, unlike a validation or auth failure."""
+    return exc.status == 429
+
+
 def error_text(exc: PathaoError) -> str:
     """One line for staff: the message plus any per-field complaints."""
     if not exc.field_errors:
@@ -380,6 +386,7 @@ __all__ = [
     "create_order",
     "enabled",
     "error_text",
+    "is_rate_limited",
     "is_sandbox",
     "list_stores",
     "order_info",

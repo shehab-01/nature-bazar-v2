@@ -1,3 +1,4 @@
+import asyncio
 import math
 import re
 from datetime import date, datetime, time, timedelta, timezone
@@ -21,7 +22,7 @@ from api.models import (
     User,
     UserRole,
 )
-from api.phone import phone_digits, phone_key
+from api.phone import bd_mobile, phone_digits, phone_key
 from api.ratelimit import client_ip, drafts_limiter, orders_limiter
 from api import catalogue
 from api.services import bdcourier, meta_capi, pathao, pathao_sync
@@ -281,6 +282,12 @@ async def save_order_draft(
         if order is None and await _has_real_order(session, key):
             return OrderDraftOut(saved=False)
 
+    creating = order is None
+    # Only relevant when updating a row: whether this autosave is the one
+    # that completed (or changed) the phone number, so the check below fires
+    # once per number rather than on every keystroke in the other fields.
+    previous_phone_key = None if creating else order.phone_key
+
     name = payload.customer_name.strip()
     address = payload.address.strip()
 
@@ -326,6 +333,15 @@ async def save_order_draft(
             order.address = address
 
     await session.commit()
+
+    # An abandoned form's phone is typed live and often still partial, so this
+    # only fires once it actually resolves to a complete BD mobile number —
+    # and only on the autosave that completed or changed it, not every
+    # keystroke in the name or address afterwards.
+    valid_phone = bd_mobile(phone)
+    if valid_phone and (creating or previous_phone_key != key):
+        bdcourier.check_order_later(order.id, valid_phone, settings.bdcourier_api_key)
+
     return OrderDraftOut(saved=True)
 
 
@@ -1254,6 +1270,9 @@ async def send_to_pathao(
         except pathao.PathaoError as exc:
             fail(order_id, pathao.error_text(exc))
             await session.rollback()
+            # A breath before the next one — a staff-picked batch must not
+            # read as a burst to Pathao either, same as the background sync.
+            await asyncio.sleep(pathao_sync.BETWEEN_CALLS_SECONDS)
             continue
         order.pathao_consignment_id = consignment.consignment_id
         order.pathao_status = consignment.order_status or None
@@ -1270,6 +1289,7 @@ async def send_to_pathao(
         )
         await session.commit()
         sent_ids.append(order.id)
+        await asyncio.sleep(pathao_sync.BETWEEN_CALLS_SECONDS)
 
     return PathaoSendOut(orders=await _load_orders(session, sent_ids), failed=failed)
 
@@ -1307,8 +1327,10 @@ async def refresh_pathao(
                     error=pathao.error_text(exc),
                 )
             )
+            await asyncio.sleep(pathao_sync.BETWEEN_CALLS_SECONDS)
             continue
         refreshed_ids.append(order.id)
+        await asyncio.sleep(pathao_sync.BETWEEN_CALLS_SECONDS)
     await session.commit()
     return PathaoSendOut(orders=await _load_orders(session, refreshed_ids), failed=failed)
 

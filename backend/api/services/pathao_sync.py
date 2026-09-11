@@ -31,7 +31,17 @@ POLL_EVERY_SECONDS = 15 * 60
 FIRST_POLL_DELAY_SECONDS = 60
 BATCH_LIMIT = 200
 # A breath between calls so a big batch never reads as a burst to Pathao.
-BETWEEN_CALLS_SECONDS = 0.3
+# 200 parcels at this pace take ~3.3 minutes, well inside the 15-minute
+# window between rounds.
+BETWEEN_CALLS_SECONDS = 1.0
+# On a 429, wait this long before trying that same parcel again.
+RATE_LIMIT_BACKOFF_SECONDS = 30
+# How many times to retry one parcel after a 429 before giving up on the
+# whole round — Pathao is telling us to slow down, not that this parcel in
+# particular is a problem, so hammering the rest of the batch would just
+# collect more 429s for no benefit. Whatever is left over is asked about in
+# the next scheduled round instead.
+RATE_LIMIT_MAX_RETRIES = 2
 # Any arbitrary constant; it only has to be the same in every worker.
 ADVISORY_LOCK_KEY = 7_420_010
 
@@ -91,18 +101,38 @@ async def poll_once() -> int:
         ).all()
         asked = 0
         for order in rows:
-            try:
-                await refresh_order(session, order)
-                asked += 1
-            except pathao.PathaoError as exc:
-                # One parcel Pathao will not answer for must not stop the
-                # rest; it is asked again next round.
-                log.warning(
-                    "Pathao sync: %s (NB-%s): %s",
-                    order.pathao_consignment_id,
-                    order.id,
-                    pathao.error_text(exc),
-                )
+            for attempt in range(RATE_LIMIT_MAX_RETRIES + 1):
+                try:
+                    await refresh_order(session, order)
+                    asked += 1
+                    break
+                except pathao.PathaoError as exc:
+                    if pathao.is_rate_limited(exc) and attempt < RATE_LIMIT_MAX_RETRIES:
+                        log.warning(
+                            "Pathao sync: rate limited on %s (NB-%s), backing off %ss",
+                            order.pathao_consignment_id,
+                            order.id,
+                            RATE_LIMIT_BACKOFF_SECONDS,
+                        )
+                        await asyncio.sleep(RATE_LIMIT_BACKOFF_SECONDS)
+                        continue
+                    if pathao.is_rate_limited(exc):
+                        log.warning(
+                            "Pathao sync: still rate limited after backing off — "
+                            "stopping this round early (%d of %d parcels asked)",
+                            asked,
+                            len(rows),
+                        )
+                        return asked
+                    # One parcel Pathao will not answer for must not stop the
+                    # rest; it is asked again next round.
+                    log.warning(
+                        "Pathao sync: %s (NB-%s): %s",
+                        order.pathao_consignment_id,
+                        order.id,
+                        pathao.error_text(exc),
+                    )
+                    break
             await asyncio.sleep(BETWEEN_CALLS_SECONDS)
         return asked
 

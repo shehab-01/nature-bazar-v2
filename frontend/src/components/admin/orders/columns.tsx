@@ -145,7 +145,9 @@ export function getOrderColumns({
       meta: { label: "Customer" },
       header: "Customer",
       cell: ({ row }) => (
-        <div className="flex flex-col gap-0.5">
+        // Wraps inside a fixed width: the table cell is nowrap by default,
+        // and a long name must fold onto more lines, never widen the table.
+        <div className="flex max-w-[220px] flex-col gap-0.5 whitespace-normal break-words">
           <span className="font-medium">
             {row.original.customerName || (
               <span className="text-muted-foreground">No name given</span>
@@ -172,7 +174,7 @@ export function getOrderColumns({
       header: "Note",
       enableSorting: false,
       cell: ({ row }) => (
-        <div className="flex max-w-[240px] flex-col gap-0.5">
+        <div className="flex max-w-[240px] flex-col gap-0.5 whitespace-normal break-words">
           <span className="text-xs text-muted-foreground">
             Updated {timeAgo(row.original.updatedAt)}
           </span>
@@ -187,7 +189,7 @@ export function getOrderColumns({
       meta: { label: "Address" },
       header: "Address",
       cell: ({ row }) => (
-        <span className="line-clamp-2 max-w-[220px] text-sm text-muted-foreground">
+        <span className="line-clamp-3 max-w-[220px] whitespace-normal break-words text-sm text-muted-foreground">
           {row.original.address}
         </span>
       ),
