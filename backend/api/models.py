@@ -9,6 +9,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    Numeric,
     String,
     Text,
     func,
@@ -122,6 +123,12 @@ class Order(Base):
     handled_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL")
     )
+    # The most recent BDCourier courier-history lookup for this order's phone
+    # number. Set once the background check (see api.services.bdcourier)
+    # finishes; null until then, or if BDCourier is not configured.
+    fraud_check_id: Mapped[int | None] = mapped_column(
+        ForeignKey("fraud_checks.id", ondelete="SET NULL"), index=True
+    )
 
     assignee: Mapped["User | None"] = relationship(
         lazy="joined", foreign_keys=[assigned_to]
@@ -129,6 +136,7 @@ class Order(Base):
     handler: Mapped["User | None"] = relationship(
         lazy="joined", foreign_keys=[handled_by]
     )
+    fraud_check: Mapped["FraudCheck | None"] = relationship(lazy="joined")
     tags: Mapped[list["OrderTag"]] = relationship(
         lazy="selectin", order_by="OrderTag.id", cascade="all, delete-orphan"
     )
@@ -254,6 +262,45 @@ class OrderEvent(Base):
 
     __table_args__ = (
         Index("ix_order_events_actor_type", "actor_id", "event_type"),
+    )
+
+
+class FraudCheck(Base):
+    """
+    One BDCourier courier-history lookup for a phone number: how many parcels
+    it has taken across couriers, how many it actually accepted, and any fraud
+    reports filed against it. Cached per phone_key for bdcourier.REUSE_FOR, so
+    reopening the same customer's order never re-spends the API's rate limit.
+
+    A failed lookup is still written here (with error set) so the attempt is
+    not silently lost, but is never reused as a cache hit — the next check
+    tries again. See api.services.bdcourier.
+    """
+
+    __tablename__ = "fraud_checks"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # Normalised phone (see api.phone.phone_key) — the cache lookup key.
+    phone_key: Mapped[str] = mapped_column(String(20), index=True)
+    phone: Mapped[str] = mapped_column(String(32))
+    checked_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    cancel: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    success_rate: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    # A trust/volume score BDCourier reports alongside the summary, if any —
+    # kept separate from `total` since it is not always the same figure.
+    rating: Mapped[int | None] = mapped_column(Integer)
+    # Per-courier breakdown (Pathao, Steadfast, RedX, CarryBee, ...).
+    couriers: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    # Fraud reports filed against this number, if any.
+    reports: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    error: Mapped[str | None] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("ix_fraud_checks_phone_checked", "phone_key", "checked_at"),
     )
 
 

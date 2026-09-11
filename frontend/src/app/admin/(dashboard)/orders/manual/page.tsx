@@ -5,6 +5,7 @@ import * as React from "react";
 import { Loader2, Minus, Plus, Trash2 } from "lucide-react";
 
 import { useAuth } from "@/components/admin/auth-context";
+import { FraudCards } from "@/components/admin/orders/fraud-summary";
 import { OrderSummaryModal } from "@/components/admin/orders/order-summary-modal";
 import { PreviousOrders } from "@/components/admin/orders/previous-orders";
 import { Button } from "@/components/ui/button";
@@ -21,12 +22,13 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   createManualOrder,
+  getFraudCheck,
   listProducts,
   lookupOrdersByPhone,
   type PhoneLookup,
 } from "@/lib/api";
 import { cleanPhoneInput, toBdMobile } from "@/lib/phone";
-import type { Order } from "@/lib/orders";
+import type { FraudCheck, Order } from "@/lib/orders";
 import { variantTitle, type Variant } from "@/lib/products";
 import { notifyOrdersChanged } from "@/lib/use-order-counts";
 import { useUnsavedChanges } from "@/lib/use-unsaved-changes";
@@ -59,6 +61,9 @@ export default function ManualOrderPage() {
   const [previous, setPrevious] = React.useState<PhoneLookup>(NO_LOOKUP);
   const [lookupLoading, setLookupLoading] = React.useState(false);
   const [searched, setSearched] = React.useState(false);
+
+  const [fraud, setFraud] = React.useState<FraudCheck | null>(null);
+  const [fraudLoading, setFraudLoading] = React.useState(false);
 
   const [saving, setSaving] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -114,6 +119,29 @@ export default function ManualOrderPage() {
         }
       } finally {
         if (!cancelled) setLookupLoading(false);
+      }
+    }, LOOKUP_DEBOUNCE_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [normalisedPhone]);
+
+  // The courier-history check runs in parallel with the previous-orders
+  // lookup, on the same debounce — neither blocks the other or the form.
+  React.useEffect(() => {
+    if (!normalisedPhone) {
+      setFraud(null);
+      setFraudLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setFraudLoading(true);
+    const timer = setTimeout(async () => {
+      const found = await getFraudCheck(normalisedPhone);
+      if (!cancelled) {
+        setFraud(found);
+        setFraudLoading(false);
       }
     }, LOOKUP_DEBOUNCE_MS);
     return () => {
@@ -228,6 +256,7 @@ export default function ManualOrderPage() {
       setTotalOverride(null);
       setPrevious(NO_LOOKUP);
       setSearched(false);
+      setFraud(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Could not create the order");
     } finally {
@@ -336,6 +365,12 @@ export default function ManualOrderPage() {
               </div>
             </div>
           </div>
+
+          {normalisedPhone && (fraud || fraudLoading) && (
+            <div className="rounded-xl border bg-card p-4 shadow-xs">
+              <FraudCards fraud={fraud} loading={fraudLoading} />
+            </div>
+          )}
 
           <PreviousOrders
             lookup={previous}

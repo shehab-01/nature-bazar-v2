@@ -1,5 +1,6 @@
 import { request, requestForm, requestVoid } from "@/lib/http";
 import type {
+  FraudCheck,
   Order,
   OrderItem,
   OrderSource,
@@ -49,7 +50,70 @@ type ApiOrder = {
     created_by_nickname: string | null;
   }[];
   items: ApiOrderItem[];
+  fraud_check: ApiFraudCheck | null;
 };
+
+export type ApiFraudCourier = {
+  key: string;
+  name: string;
+  total: number;
+  success: number;
+  cancel: number;
+  success_rate: number | null;
+  logo: string | null;
+};
+
+export type ApiFraudReport = {
+  id: string;
+  name: string | null;
+  details: string | null;
+  created_at: string | null;
+  courier_name: string | null;
+  courier_logo: string | null;
+};
+
+export type ApiFraudCheck = {
+  id: number;
+  checked_at: string;
+  total: number;
+  success: number;
+  cancel: number;
+  success_rate: number | null;
+  rating: number | null;
+  couriers: ApiFraudCourier[];
+  reports: ApiFraudReport[];
+  error: string | null;
+};
+
+function mapFraud(data: ApiFraudCheck): FraudCheck {
+  return {
+    id: data.id,
+    checkedAt: data.checked_at,
+    total: data.total,
+    success: data.success,
+    cancel: data.cancel,
+    successRate: data.success_rate,
+    rating: data.rating,
+    couriers: (data.couriers ?? []).map((c) => ({
+      key: c.key,
+      name: c.name,
+      total: c.total,
+      success: c.success,
+      cancel: c.cancel,
+      successRate: c.success_rate,
+      logo: c.logo,
+    })),
+    reports: (data.reports ?? []).map((r) => ({
+      id: r.id,
+      name: r.name,
+      details: r.details,
+      createdAt: r.created_at,
+      courierName: r.courier_name,
+      courierLogo: r.courier_logo,
+    })),
+    error: data.error,
+  };
+}
 
 type ApiOrderItem = {
   id: number;
@@ -136,6 +200,7 @@ function mapOrder(order: ApiOrder): Order {
         createdByNickname: tag.created_by_nickname,
       })
     ),
+    fraudCheck: order.fraud_check ? mapFraud(order.fraud_check) : null,
   };
 }
 
@@ -888,4 +953,38 @@ export async function lookupOrdersByPhone(
     orders: (data.orders ?? []).map(mapOrder),
     incomplete: (data.incomplete ?? []).map(mapOrder),
   };
+}
+
+/**
+ * This number's BDCourier history, for the manual-order form as staff type
+ * the phone in. 503 (not configured) and any other failure both come back as
+ * null — a courier check must never block taking the order.
+ */
+export async function getFraudCheck(phone: string): Promise<FraudCheck | null> {
+  try {
+    return mapFraud(
+      await request<ApiFraudCheck>(
+        `/api/orders/fraud-check?phone=${encodeURIComponent(phone)}`
+      )
+    );
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A courier-history lookup pinned to this order. force=false reuses a cached
+ * check when one is still fresh (the modal's silent retry for a row with no
+ * data yet); force=true always calls out (the "Check again" button).
+ */
+export async function recheckOrderFraud(
+  orderId: number,
+  force = false
+): Promise<Order> {
+  return mapOrder(
+    await request<ApiOrder>(
+      `/api/orders/${orderId}/fraud-check${force ? "?force=true" : ""}`,
+      { method: "POST" }
+    )
+  );
 }

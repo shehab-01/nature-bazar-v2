@@ -110,6 +110,44 @@ class OrderItemOut(BaseModel):
         return self.unit_price * self.quantity
 
 
+class FraudCourierOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    key: str
+    name: str
+    total: int
+    success: int
+    cancel: int
+    success_rate: float | None
+    logo: str | None
+
+
+class FraudReportOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    name: str | None
+    details: str | None
+    created_at: str | None
+    courier_name: str | None
+    courier_logo: str | None
+
+
+class FraudCheckOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    checked_at: datetime
+    total: int
+    success: int
+    cancel: int
+    success_rate: float | None
+    rating: int | None
+    couriers: list[FraudCourierOut] = []
+    reports: list[FraudReportOut] = []
+    error: str | None = None
+
+
 class OrderOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -141,6 +179,9 @@ class OrderOut(BaseModel):
     pathao_status: str | None = None
     pathao_delivery_fee: int | None = None
     pathao_sent_at: datetime | None = None
+    # The most recent BDCourier courier-history lookup for this order's phone,
+    # if any check has been run — see api.services.bdcourier.
+    fraud_check: FraudCheckOut | None = None
     # Read to derive auto_captured; never serialised — it is the browser's key.
     draft_key: str | None = Field(default=None, exclude=True)
 

@@ -40,6 +40,7 @@ services:
       PATHAO_PASSWORD: ${PATHAO_PASSWORD:-}
       PATHAO_STORE_ID: ${PATHAO_STORE_ID:-0}
       PATHAO_UNIT_WEIGHT_KG: ${PATHAO_UNIT_WEIGHT_KG:-1}
+      BDCOURIER_API_KEY: ${BDCOURIER_API_KEY:-}
       MEDIA_ROOT: /app/media
     volumes:
       # Uploaded product images. A named volume, not a bind or a path inside

@@ -24,7 +24,7 @@ from api.models import (
 from api.phone import phone_digits, phone_key
 from api.ratelimit import client_ip, drafts_limiter, orders_limiter
 from api import catalogue
-from api.services import meta_capi, pathao, pathao_sync
+from api.services import bdcourier, meta_capi, pathao, pathao_sync
 from api.schemas import (
     BulkOrderResult,
     BulkOrderUpdate,
@@ -35,6 +35,7 @@ from api.schemas import (
     DashboardOut,
     DashboardPeriod,
     DashboardTotals,
+    FraudCheckOut,
     OrderCountsOut,
     OrderCreate,
     OrderDraft,
@@ -475,6 +476,9 @@ async def create_order(
             # sides of the Purchase deduplicate against one product.
             sku=product.sku,
         )
+    # The customer's courier history, looked up in the background and pinned
+    # to the order for the table and the modal. Skipped without a key.
+    bdcourier.check_order_later(order.id, order.phone, settings.bdcourier_api_key)
     return order
 
 
@@ -895,6 +899,53 @@ async def lookup_by_phone(
     return PhoneLookupOut(phone=key, orders=placed, incomplete=abandoned)
 
 
+@router.get("/fraud-check", response_model=FraudCheckOut)
+async def fraud_check_phone(
+    phone: str = Query(min_length=6, max_length=32),
+    session: AsyncSession = Depends(get_session),
+    _user: User = Depends(get_current_user),
+):
+    """
+    This number's courier history, for the manual-order form as staff type
+    the phone in. Cached for bdcourier.REUSE_FOR, so retyping or reopening the
+    same number doesn't re-spend the API's rate limit.
+    """
+    if not settings.bdcourier_api_key:
+        raise HTTPException(
+            status_code=503, detail="BDCourier is not configured on the server"
+        )
+    row = await bdcourier.check(session, phone, settings.bdcourier_api_key)
+    await session.commit()
+    return row
+
+
+@router.post("/{order_id}/fraud-check", response_model=OrderOut)
+async def fraud_check_order(
+    order_id: int,
+    force: bool = Query(False),
+    session: AsyncSession = Depends(get_session),
+    _user: User = Depends(get_current_user),
+) -> Order:
+    """
+    A courier-history lookup pinned to this order. force=false (the modal's
+    silent retry when a row has no data yet) reuses a cached check if one is
+    still fresh; force=true (the "Check again" button) always calls out.
+    """
+    if not settings.bdcourier_api_key:
+        raise HTTPException(
+            status_code=503, detail="BDCourier is not configured on the server"
+        )
+    order = await session.get(Order, order_id)
+    if order is None:
+        raise HTTPException(status_code=404, detail="Order not found")
+    row = await bdcourier.check(
+        session, order.phone, settings.bdcourier_api_key, force=force
+    )
+    order.fraud_check_id = row.id
+    await session.commit()
+    return await _get_fresh_order(session, order_id)
+
+
 @router.post("/manual", response_model=OrderOut, status_code=201)
 async def create_manual_order(
     payload: ManualOrderCreate,
@@ -981,6 +1032,7 @@ async def create_manual_order(
         )
     )
     await session.commit()
+    bdcourier.check_order_later(order.id, order.phone, settings.bdcourier_api_key)
     return await _get_fresh_order(session, order.id)
 
 

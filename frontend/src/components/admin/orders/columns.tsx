@@ -4,6 +4,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Check, ExternalLink, Lock } from "lucide-react";
 
 import { SortableHeader } from "@/components/admin/data-table/data-table-sort-header";
+import { FraudBadge } from "@/components/admin/orders/fraud-summary";
 import { OrderTags } from "@/components/admin/orders/order-tags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -245,6 +246,18 @@ export function getOrderColumns({
       enableSorting: false,
       meta: { label: "Courier" },
       cell: ({ row }) => <FlagCell on={row.original.courier} />,
+    },
+    {
+      id: "fraud",
+      accessorFn: (row) => row.fraudCheck?.successRate ?? -1,
+      meta: { label: "Success Rate" },
+      header: ({ column }) => (
+        <SortableHeader
+          label="Success Rate"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+        />
+      ),
+      cell: ({ row }) => <FraudBadge fraud={row.original.fraudCheck} />,
     },
     {
       id: "pathao",

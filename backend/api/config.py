@@ -88,6 +88,10 @@ class Settings:
         "PATHAO_TRACKING_URL", "https://merchant.pathao.com/tracking"
     )
 
+    # BDCourier courier-history lookup (courier-check API). Disabled — every
+    # check is skipped — until a key is set.
+    bdcourier_api_key: str = os.getenv("BDCOURIER_API_KEY", "")
+
     # Auth
     google_client_id: str = os.getenv("GOOGLE_CLIENT_ID", "")
     session_secret: str = os.getenv("SESSION_SECRET", "")
@@ -101,3 +105,4 @@ class Settings:
 
 
 settings = Settings()
+

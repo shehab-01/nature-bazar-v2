@@ -173,6 +173,41 @@ export type OrderItem = {
   lineTotal: number;
 };
 
+/** One courier's slice of a phone number's BDCourier history. */
+export type FraudCourier = {
+  key: string;
+  name: string;
+  total: number;
+  success: number;
+  cancel: number;
+  successRate: number | null;
+  logo: string | null;
+};
+
+/** A fraud report BDCourier has on file against a phone number. */
+export type FraudReport = {
+  id: string;
+  name: string | null;
+  details: string | null;
+  createdAt: string | null;
+  courierName: string | null;
+  courierLogo: string | null;
+};
+
+/** A BDCourier courier-history lookup for an order's phone number. */
+export type FraudCheck = {
+  id: number;
+  checkedAt: string;
+  total: number;
+  success: number;
+  cancel: number;
+  successRate: number | null;
+  rating: number | null;
+  couriers: FraudCourier[];
+  reports: FraudReport[];
+  error: string | null;
+};
+
 export type Order = {
   id: number;
   orderNo: string;
@@ -209,6 +244,8 @@ export type Order = {
   pathaoDeliveryFee: number | null;
   pathaoSentAt: string | null;
   pathaoTrackingUrl: string | null;
+  /** BDCourier's most recent courier-history lookup; null until one runs. */
+  fraudCheck: FraudCheck | null;
 };
 
 export function formatOrderDateTime(iso: string): string {

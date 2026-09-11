@@ -4,6 +4,7 @@ import * as React from "react";
 import { ArrowLeft, ExternalLink, Phone } from "lucide-react";
 
 import { useAuth } from "@/components/admin/auth-context";
+import { FraudCards } from "@/components/admin/orders/fraud-summary";
 import { OrderTags } from "@/components/admin/orders/order-tags";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { updateOrder } from "@/lib/api";
+import { recheckOrderFraud, updateOrder } from "@/lib/api";
 import {
   CHANGE_STATUS_OPTIONS,
   ORDER_SOURCE_LABELS,
@@ -73,6 +74,8 @@ export function OrderDetailsModal({
   const [editAddress, setEditAddress] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [fraudLoading, setFraudLoading] = React.useState(false);
+  const [rechecking, setRechecking] = React.useState(false);
   // Unsaved edits are reviewed before a status change or before closing:
   // which of the two the person was doing decides what happens after Save.
   const [review, setReview] = React.useState<"status" | "close" | null>(null);
@@ -90,7 +93,45 @@ export function OrderDetailsModal({
     }
   }, [order?.id, open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A row with no courier check yet (or one that errored) is looked up again
+  // as soon as the modal opens; a row that already has data — even a real
+  // "0 parcels" result — is left alone, so reopening an order never re-spends
+  // BDCourier's rate limit.
+  React.useEffect(() => {
+    if (!open || !order) return;
+    const needsCheck = !order.fraudCheck || order.fraudCheck.error;
+    if (!needsCheck) return;
+    let cancelled = false;
+    setFraudLoading(true);
+    recheckOrderFraud(order.id)
+      .then((updated) => {
+        if (!cancelled) onOrderUpdated(updated);
+      })
+      .catch(() => {
+        // A courier-API outage must never block viewing the order.
+      })
+      .finally(() => {
+        if (!cancelled) setFraudLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [order?.id, open]);
+
   if (!order) return null;
+
+  const refreshFraud = async () => {
+    setRechecking(true);
+    try {
+      const updated = await recheckOrderFraud(order.id, true);
+      onOrderUpdated(updated);
+    } catch {
+      // The card shows its own error state from the stale fraud check.
+    } finally {
+      setRechecking(false);
+    }
+  };
 
   const claim = activeClaim(order);
 
@@ -244,7 +285,17 @@ export function OrderDetailsModal({
           </div>
         </DialogHeader>
 
-        <div className="grid flex-1 gap-6 overflow-y-auto p-6 lg:grid-cols-[2fr_1fr]">
+        <div className="flex-1 overflow-y-auto">
+          {(order.fraudCheck || fraudLoading) && (
+            <div className="border-b px-6 py-4">
+              <FraudCards
+                fraud={order.fraudCheck}
+                loading={fraudLoading || rechecking}
+                onRefresh={refreshFraud}
+              />
+            </div>
+          )}
+          <div className="grid gap-6 p-6 lg:grid-cols-[2fr_1fr]">
           {/* Main column */}
           <div className="flex flex-col gap-6">
             <div className="flex flex-col gap-2">
@@ -547,6 +598,7 @@ export function OrderDetailsModal({
                 </div>
               </div>
             </div>
+          </div>
           </div>
         </div>
       </DialogContent>
