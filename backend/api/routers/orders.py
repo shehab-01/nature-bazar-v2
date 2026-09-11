@@ -501,7 +501,7 @@ async def create_order(
 @router.get("", response_model=OrderListOut)
 async def list_orders(
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=100),
+    page_size: int = Query(25, ge=1, le=1000),
     status: list[OrderStatus] | None = Query(None),
     date_from: date | None = None,
     date_to: date | None = None,
