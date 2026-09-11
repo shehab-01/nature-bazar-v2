@@ -1196,9 +1196,14 @@ async def bulk_update(
     )
 
 
-# Only orders that have been confirmed by phone, or already handed to
-# shipping, may be booked with the courier.
-PATHAO_SENDABLE = {OrderStatus.confirmed.value, OrderStatus.shipped.value}
+# Only orders that have been confirmed by phone, already handed to shipping,
+# or archived to History (Shipping's own orders, moved off that list by
+# hand — not skipped, just filed) may be booked with the courier.
+PATHAO_SENDABLE = {
+    OrderStatus.confirmed.value,
+    OrderStatus.shipped.value,
+    OrderStatus.history.value,
+}
 
 
 @router.post("/pathao/send", response_model=PathaoSendOut)

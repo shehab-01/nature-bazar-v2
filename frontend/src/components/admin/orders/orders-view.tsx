@@ -116,8 +116,10 @@ export function OrdersView({
   showStaff?: boolean;
   /**
    * Which bulk actions ticking rows offers. "confirm" sends the batch on to
-   * Shipping; "ship" books it with Pathao and prints stickers. Omit for
-   * lists that only ever work one order at a time.
+   * Shipping; "ship" books it with Pathao, prints stickers and archives to
+   * History; "history" offers the same Pathao and print actions on already
+   * archived orders, without the archive step. Omit for lists that only ever
+   * work one order at a time.
    */
   bulkActions?: BulkMode;
 }) {
